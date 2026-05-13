@@ -1,2 +1,5 @@
+[build]
+builder = "nixpacks"
+
 [deploy]
-startCommand = "python edge/roadai.py"
+startCommand = "gunicorn -w 1 -b 0.0.0.0:$PORT edge.roadai:app --timeout 120"
