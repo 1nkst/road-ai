@@ -30,7 +30,7 @@
       content: '';
       position: fixed;
       inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' num[...]
       pointer-events: none;
       z-index: 9999;
       opacity: 0.4;
@@ -248,7 +248,7 @@
   <div class="video-section">
     <div class="video-label">// CAMERA FEED — REAL-TIME INFERENCE</div>
     <div class="video-wrapper">
-      <img id="videoFeed" src="http://localhost:5000/video_feed" alt="Live Feed"
+      <img id="videoFeed" alt="Live Feed"
            onerror="showStreamError()" onload="hideStreamError()"/>
       <div class="corner tl"></div>
       <div class="corner tr"></div>
@@ -350,6 +350,20 @@
 </div>
 
 <script>
+  // Determine backend URL
+  function getBackendUrl() {
+    // If running locally
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
+    // If deployed on GitHub Pages with Railway backend
+    // Set VITE_BACKEND_URL environment variable or use this default
+    return localStorage.getItem('backendUrl') || 'https://your-railway-app.railway.app';
+  }
+
+  const BACKEND_URL = getBackendUrl();
+  console.log('Backend URL:', BACKEND_URL);
+
   function updateClock() {
     document.getElementById('clock').textContent = new Date().toLocaleTimeString();
   }
@@ -395,9 +409,14 @@
 
   let confidences = [];
 
+  // Initialize video feed with backend URL
+  function initializeVideoFeed() {
+    document.getElementById('videoFeed').src = `${BACKEND_URL}/video_feed`;
+  }
+
   async function pollDetections() {
     try {
-      const res = await fetch('http://localhost:5000/detections');
+      const res = await fetch(`${BACKEND_URL}/detections`);
       if (!res.ok) return;
       const data = await res.json();
       if (!data.detections || data.detections.length === 0) return;
@@ -433,9 +452,13 @@
         document.getElementById('statAvgConf').textContent = (avg * 100).toFixed(0) + '%';
       }
 
-    } catch(e) {}
+    } catch(e) {
+      console.error('Detection poll error:', e);
+    }
   }
 
+  // Initialize on page load
+  initializeVideoFeed();
   setInterval(pollDetections, 500);
 </script>
 </body>

@@ -4,13 +4,17 @@ import base64
 import requests
 import threading
 import time
+import os
 from flask import Flask, Response, jsonify
+from dotenv import load_dotenv
 
-# Config
-API_URL = "http://localhost:9001"
-API_KEY = "T4zuK4T4cMUowqMPvSVl"
-WORKSPACE = "cheemo"
-WORKFLOW_ID = "custom-workflow-2"
+load_dotenv()
+
+# Config from environment variables, with defaults for local development
+API_URL = os.getenv("API_URL", "http://localhost:9001")
+API_KEY = os.getenv("API_KEY", "T4zuK4T4cMUowqMPvSVl")
+WORKSPACE = os.getenv("WORKSPACE", "cheemo")
+WORKFLOW_ID = os.getenv("WORKFLOW_ID", "custom-workflow-2")
 INFERENCE_WIDTH = 640
 INFERENCE_HEIGHT = 360
 DISPLAY_WIDTH = 1280
@@ -197,13 +201,20 @@ def detections():
         dets = latest_detections.copy()
     return jsonify({"detections": dets})
 
+@app.route('/health')
+def health():
+    return jsonify({"status": "ok"})
+
 @app.after_request
 def add_cors(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     return response
 
 if __name__ == '__main__':
+    port = int(os.getenv('PORT', 5000))
     threading.Thread(target=inference_worker, daemon=True).start()
     threading.Thread(target=camera_worker, daemon=True).start()
-    print("RoadAI running at http://localhost:5000")
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    print(f"RoadAI running at http://0.0.0.0:{port}")
+    app.run(host='0.0.0.0', port=port, threaded=True)
