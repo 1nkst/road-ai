@@ -16,6 +16,7 @@
       --text: #f0f0f0;
       --muted: #555;
       --danger: #ff4d4d;
+      --warn: #f5a623;
     }
 
     html, body {
@@ -30,18 +31,21 @@
       content: '';
       position: fixed;
       inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' num[...]
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
       pointer-events: none;
       z-index: 9999;
       opacity: 0.4;
     }
 
+    /* ── Header ── */
     header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 20px 36px;
       border-bottom: 1px solid var(--border);
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
     .logo { display: flex; align-items: center; gap: 12px; }
@@ -55,6 +59,8 @@
     .logo-text { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; }
     .logo-text span { color: var(--accent); }
 
+    .header-center { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
     .status-pill {
       display: flex; align-items: center; gap: 8px;
       padding: 6px 14px;
@@ -62,11 +68,14 @@
       border-radius: 999px;
       font-family: 'Space Mono', monospace;
       font-size: 0.7rem; color: var(--muted);
+      transition: all .3s;
     }
+    .status-pill.connected { border-color: var(--accent); color: var(--accent); }
+    .status-pill.demo-mode { border-color: var(--warn); color: var(--warn); }
     .status-dot {
       width: 7px; height: 7px;
       border-radius: 50%;
-      background: var(--accent);
+      background: currentColor;
       animation: pulse 2s ease-in-out infinite;
     }
     @keyframes pulse {
@@ -74,8 +83,45 @@
       50% { opacity: 0.4; transform: scale(0.8); }
     }
 
+    /* Device URL input */
+    .device-input-wrap {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .device-input-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.62rem; color: var(--muted); white-space: nowrap;
+    }
+    .device-input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      outline: none;
+      width: 180px;
+      transition: border-color .2s;
+    }
+    .device-input:focus { border-color: var(--accent); }
+    .connect-btn {
+      padding: 5px 12px;
+      background: var(--accent);
+      color: #0a0a0a;
+      border: none;
+      border-radius: 6px;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .2s;
+      white-space: nowrap;
+    }
+    .connect-btn:hover { background: #a8d120; }
+
     .header-time { font-family: 'Space Mono', monospace; font-size: 0.75rem; color: var(--muted); }
 
+    /* ── Layout ── */
     .layout {
       display: grid;
       grid-template-columns: 1fr 300px;
@@ -127,16 +173,36 @@
       background: var(--danger); border-radius: 50%;
       animation: pulse 1s ease-in-out infinite;
     }
+    .demo-badge-text { color: var(--warn); }
 
-    .stream-error {
+    /* ── Offline / Demo state ── */
+    .stream-placeholder {
       position: absolute; inset: 0;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      gap: 10px; color: var(--muted);
-      font-family: 'Space Mono', monospace; font-size: 0.75rem; text-align: center;
+      gap: 14px; padding: 32px; text-align: center;
     }
-    .stream-error svg { opacity: 0.3; }
+    .stream-placeholder-icon { opacity: 0.15; }
+    .stream-placeholder-title {
+      font-size: 1rem; font-weight: 700; color: var(--warn);
+    }
+    .stream-placeholder-sub {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem; color: var(--muted); line-height: 1.8;
+    }
+    .demo-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 320px;
+    }
+    .demo-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px;
+      text-align: left;
+    }
+    .demo-card-label { font-size: 0.58rem; font-family: 'Space Mono', monospace; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; }
+    .demo-card-val { font-size: 0.85rem; font-weight: 700; color: var(--accent); font-family: 'Space Mono', monospace; }
 
+    /* ── Sidebar ── */
     .sidebar {
       border-left: 1px solid var(--border);
       display: flex; flex-direction: column;
@@ -215,12 +281,27 @@
     .log-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
     .log-dot.pothole { background: var(--danger); }
     .log-dot.seg { background: var(--accent); }
+    .log-dot.demo { background: var(--warn); }
     .log-info { flex: 1; }
     .log-type { font-size: 0.72rem; font-weight: 600; margin-bottom: 2px; }
     .log-meta { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--muted); }
     .log-conf { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent); }
 
     .no-data { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); text-align: center; padding: 20px 0; }
+
+    /* Demo mode notice banner */
+    .demo-notice {
+      background: rgba(245,166,35,0.08);
+      border: 1px solid rgba(245,166,35,0.25);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.6rem;
+      color: var(--warn);
+      line-height: 1.6;
+      margin-bottom: 10px;
+    }
+    .demo-notice strong { display: block; margin-bottom: 2px; }
   </style>
 </head>
 <body>
@@ -236,39 +317,82 @@
     </div>
     <div class="logo-text">Road<span>AI</span></div>
   </div>
-  <div class="status-pill">
-    <div class="status-dot"></div>
-    LIVE STREAM
+
+  <div class="header-center">
+    <div class="status-pill" id="statusPill">
+      <div class="status-dot"></div>
+      <span id="statusText">CONNECTING...</span>
+    </div>
+    <div class="device-input-wrap">
+      <span class="device-input-label">Device IP:</span>
+      <input class="device-input" id="deviceUrl" value="http://localhost:5000" placeholder="http://192.168.x.x:5000"/>
+      <button class="connect-btn" onclick="reconnect()">Connect</button>
+    </div>
   </div>
+
   <div class="header-time" id="clock">--:--:--</div>
 </header>
 
 <div class="layout">
 
+  <!-- ── VIDEO PANEL ── -->
   <div class="video-section">
-    <div class="video-label">// CAMERA FEED — REAL-TIME INFERENCE</div>
+    <div class="video-label" id="videoLabel">// CAMERA FEED — REAL-TIME INFERENCE</div>
     <div class="video-wrapper">
-      <img id="videoFeed" alt="Live Feed"
-           onerror="showStreamError()" onload="hideStreamError()"/>
+
+      <!-- Live stream img (shown when connected) -->
+      <img id="videoFeed" src="" alt="Live Feed" style="display:none"
+           onerror="onStreamError()" onload="onStreamLoad()"/>
+
+      <!-- Offline / Demo placeholder (shown when disconnected) -->
+      <div class="stream-placeholder" id="streamPlaceholder">
+        <div class="stream-placeholder-icon">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#c8f135" stroke-width="1.2">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <path d="M8 21h8M12 17v4"/>
+            <path d="M9 9l3-3 3 3M12 6v6"/>
+          </svg>
+        </div>
+        <div class="stream-placeholder-title">DEMO MODE</div>
+        <div class="stream-placeholder-sub">
+          No device connected.<br/>
+          Enter your device IP above and press Connect.<br/><br/>
+          <span style="color:#333">When running locally: http://localhost:5000</span><br/>
+          <span style="color:#333">On the Pi hotspot: http://192.168.x.x:5000</span>
+        </div>
+        <div class="demo-grid">
+          <div class="demo-card">
+            <div class="demo-card-label">Model A</div>
+            <div class="demo-card-val">ROAD AI 9</div>
+          </div>
+          <div class="demo-card">
+            <div class="demo-card-label">Model B</div>
+            <div class="demo-card-val">SEG v2</div>
+          </div>
+          <div class="demo-card">
+            <div class="demo-card-label">mAP@50</div>
+            <div class="demo-card-val">83.1%</div>
+          </div>
+          <div class="demo-card">
+            <div class="demo-card-label">Status</div>
+            <div class="demo-card-val" style="color:var(--warn)">OFFLINE</div>
+          </div>
+        </div>
+      </div>
+
       <div class="corner tl"></div>
       <div class="corner tr"></div>
       <div class="corner bl"></div>
       <div class="corner br"></div>
-      <div class="video-overlay-badge">
+
+      <div class="video-overlay-badge" id="recBadge">
         <div class="rec-dot"></div>
-        REC · LIVE
-      </div>
-      <div class="stream-error" id="streamError" style="display:none;">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        Stream unavailable<br/>Start your Python server to connect
+        <span id="recBadgeText">DEMO</span>
       </div>
     </div>
   </div>
 
+  <!-- ── SIDEBAR ── -->
   <div class="sidebar">
 
     <div class="sidebar-section">
@@ -341,6 +465,10 @@
 
     <div class="log-section">
       <div class="sidebar-title">// Detection Log</div>
+      <div id="demoNotice" class="demo-notice" style="display:none">
+        <strong>⚡ DEMO MODE</strong>
+        Simulated detections shown.<br/>Connect a device to see live data.
+      </div>
       <div class="log-list" id="logList">
         <div class="no-data">Waiting for detections...</div>
       </div>
@@ -350,20 +478,7 @@
 </div>
 
 <script>
-  // Determine backend URL
-  function getBackendUrl() {
-    // If running locally
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'http://localhost:5000';
-    }
-    // If deployed on GitHub Pages with Railway backend
-    // Set VITE_BACKEND_URL environment variable or use this default
-    return localStorage.getItem('backendUrl') || 'https://your-railway-app.railway.app';
-  }
-
-  const BACKEND_URL = getBackendUrl();
-  console.log('Backend URL:', BACKEND_URL);
-
+  // ── Clock & uptime ──────────────────────────────────────────
   function updateClock() {
     document.getElementById('clock').textContent = new Date().toLocaleTimeString();
   }
@@ -379,26 +494,167 @@
       h > 0 ? `${h}h${m%60}m` : m > 0 ? `${m}m${s%60}s` : `${s}s`;
   }, 1000);
 
-  function showStreamError() {
-    document.getElementById('streamError').style.display = 'flex';
-    document.getElementById('videoFeed').style.display = 'none';
-  }
-  function hideStreamError() {
-    document.getElementById('streamError').style.display = 'none';
-    document.getElementById('videoFeed').style.display = 'block';
+  // ── Connection state ────────────────────────────────────────
+  let deviceUrl = 'http://localhost:5000';
+  let isConnected = false;
+  let pollTimer = null;
+  let demoTimer = null;
+  let confidences = [];
+
+  function setConnected(connected) {
+    isConnected = connected;
+    const pill = document.getElementById('statusPill');
+    const text = document.getElementById('statusText');
+    const feed = document.getElementById('videoFeed');
+    const placeholder = document.getElementById('streamPlaceholder');
+    const badge = document.getElementById('recBadgeText');
+    const demoNotice = document.getElementById('demoNotice');
+
+    if (connected) {
+      pill.className = 'status-pill connected';
+      text.textContent = 'LIVE — ' + deviceUrl.replace('http://', '');
+      feed.style.display = 'block';
+      placeholder.style.display = 'none';
+      badge.textContent = 'REC · LIVE';
+      demoNotice.style.display = 'none';
+      stopDemoMode();
+    } else {
+      pill.className = 'status-pill demo-mode';
+      text.textContent = 'DEMO MODE — NO DEVICE';
+      feed.style.display = 'none';
+      placeholder.style.display = 'flex';
+      badge.textContent = 'DEMO';
+      demoNotice.style.display = 'block';
+      startDemoMode();
+    }
   }
 
-  function addLogEntry(type, confidence) {
+  function reconnect() {
+    deviceUrl = document.getElementById('deviceUrl').value.trim().replace(/\/$/, '');
+    if (!deviceUrl) return;
+
+    document.getElementById('statusPill').className = 'status-pill';
+    document.getElementById('statusText').textContent = 'CONNECTING...';
+
+    // Try loading the video feed — if it works we're connected
+    const feed = document.getElementById('videoFeed');
+    feed.src = deviceUrl + '/video_feed?' + Date.now();
+
+    // Also try a quick fetch to /detections to verify
+    fetch(deviceUrl + '/detections', { signal: AbortSignal.timeout(3000) })
+      .then(r => { if (r.ok) setConnected(true); else throw new Error(); })
+      .catch(() => setConnected(false));
+  }
+
+  function onStreamLoad() { setConnected(true); }
+  function onStreamError() {
+    if (isConnected) setConnected(false);
+  }
+
+  // ── Live detection polling ──────────────────────────────────
+  function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(pollDetections, 500);
+  }
+
+  async function pollDetections() {
+    if (!isConnected) return;
+    try {
+      const res = await fetch(deviceUrl + '/detections', { signal: AbortSignal.timeout(2000) });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (!data.detections || data.detections.length === 0) return;
+
+      const bbox = data.detections.find(d => d.type === 'bbox');
+      const seg  = data.detections.find(d => d.type === 'seg');
+
+      if (bbox) {
+        document.getElementById('bboxW').textContent    = bbox.bbox_width_cm  != null ? bbox.bbox_width_cm  + ' cm'  : '—';
+        document.getElementById('bboxH').textContent    = bbox.bbox_height_cm != null ? bbox.bbox_height_cm + ' cm'  : '—';
+        document.getElementById('bboxArea').textContent = bbox.bbox_area_cm2  != null ? bbox.bbox_area_cm2  + ' cm²' : '—';
+        const pct = (bbox.confidence * 100).toFixed(0);
+        document.getElementById('confBbox').textContent = pct + '%';
+        document.getElementById('confBboxBar').style.width = pct + '%';
+        confidences.push(bbox.confidence);
+        addLogEntry(bbox.class, bbox.confidence, false);
+      }
+
+      if (seg) {
+        document.getElementById('segW').textContent    = seg.seg_width_cm  != null ? seg.seg_width_cm  + ' cm'  : '—';
+        document.getElementById('segH').textContent    = seg.seg_height_cm != null ? seg.seg_height_cm + ' cm'  : '—';
+        document.getElementById('segArea').textContent = seg.seg_area_cm2  != null ? seg.seg_area_cm2  + ' cm²' : '—';
+        const pct = (seg.confidence * 100).toFixed(0);
+        document.getElementById('confSeg').textContent = pct + '%';
+        document.getElementById('confSegBar').style.width = pct + '%';
+        confidences.push(seg.confidence);
+        addLogEntry('Segmentation', seg.confidence, false);
+      }
+
+      updateAvgConf();
+    } catch(e) {
+      // Connection dropped
+      if (isConnected) setConnected(false);
+    }
+  }
+
+  // ── Demo mode (simulated detections) ───────────────────────
+  const DEMO_CLASSES = ['Pothole','Crack','Surface Damage','Pothole','Segmentation'];
+  const DEMO_METRICS = [
+    { bboxW:'24.3 cm', bboxH:'18.7 cm', bboxArea:'454.4 cm²', segW:'22.1 cm', segH:'17.0 cm', segArea:'375.7 cm²' },
+    { bboxW:'11.2 cm', bboxH:'8.4 cm',  bboxArea:'94.1 cm²',  segW:'10.8 cm', segH:'7.9 cm',  segArea:'85.3 cm²' },
+    { bboxW:'38.0 cm', bboxH:'29.5 cm', bboxArea:'1121 cm²',  segW:'35.6 cm', segH:'27.2 cm', segArea:'968.3 cm²' },
+  ];
+
+  function startDemoMode() {
+    if (demoTimer) return;
+    demoTimer = setInterval(() => {
+      const cls  = DEMO_CLASSES[Math.floor(Math.random() * DEMO_CLASSES.length)];
+      const conf = 0.68 + Math.random() * 0.28;
+      const m    = DEMO_METRICS[Math.floor(Math.random() * DEMO_METRICS.length)];
+
+      document.getElementById('bboxW').textContent    = m.bboxW;
+      document.getElementById('bboxH').textContent    = m.bboxH;
+      document.getElementById('bboxArea').textContent = m.bboxArea;
+      document.getElementById('segW').textContent     = m.segW;
+      document.getElementById('segH').textContent     = m.segH;
+      document.getElementById('segArea').textContent  = m.segArea;
+
+      const pct = (conf * 100).toFixed(0);
+      document.getElementById('confBbox').textContent    = pct + '%';
+      document.getElementById('confBboxBar').style.width = pct + '%';
+      document.getElementById('confSeg').textContent     = pct + '%';
+      document.getElementById('confSegBar').style.width  = pct + '%';
+
+      confidences.push(conf);
+      updateAvgConf();
+      addLogEntry(cls, conf, true);
+    }, 2200);
+  }
+
+  function stopDemoMode() {
+    if (demoTimer) { clearInterval(demoTimer); demoTimer = null; }
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────
+  function updateAvgConf() {
+    if (confidences.length > 50) confidences = confidences.slice(-50);
+    const avg = confidences.reduce((a, b) => a + b, 0) / confidences.length;
+    document.getElementById('statAvgConf').textContent = (avg * 100).toFixed(0) + '%';
+  }
+
+  function addLogEntry(type, confidence, isDemo) {
     const list = document.getElementById('logList');
     const placeholder = list.querySelector('.no-data');
     if (placeholder) placeholder.remove();
 
+    const dotClass = isDemo ? 'demo' : type === 'Segmentation' ? 'seg' : 'pothole';
+
     const item = document.createElement('div');
     item.className = 'log-item';
     item.innerHTML = `
-      <div class="log-dot ${type === 'Segmentation' ? 'seg' : 'pothole'}"></div>
+      <div class="log-dot ${dotClass}"></div>
       <div class="log-info">
-        <div class="log-type">${type}</div>
+        <div class="log-type">${type}${isDemo ? ' <span style="font-size:.55rem;color:var(--warn)">[DEMO]</span>' : ''}</div>
         <div class="log-meta">${new Date().toLocaleTimeString()}</div>
       </div>
       <div class="log-conf">${(confidence * 100).toFixed(0)}%</div>
@@ -407,59 +663,10 @@
     while (list.children.length > 20) list.removeChild(list.lastChild);
   }
 
-  let confidences = [];
-
-  // Initialize video feed with backend URL
-  function initializeVideoFeed() {
-    document.getElementById('videoFeed').src = `${BACKEND_URL}/video_feed`;
-  }
-
-  async function pollDetections() {
-    try {
-      const res = await fetch(`${BACKEND_URL}/detections`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!data.detections || data.detections.length === 0) return;
-
-      const bbox = data.detections.find(d => d.type === 'bbox');
-      const seg = data.detections.find(d => d.type === 'seg');
-
-      if (bbox) {
-        document.getElementById('bboxW').textContent = bbox.bbox_width_cm != null ? bbox.bbox_width_cm + ' cm' : '—';
-        document.getElementById('bboxH').textContent = bbox.bbox_height_cm != null ? bbox.bbox_height_cm + ' cm' : '—';
-        document.getElementById('bboxArea').textContent = bbox.bbox_area_cm2 != null ? bbox.bbox_area_cm2 + ' cm²' : '—';
-        const pct = (bbox.confidence * 100).toFixed(0);
-        document.getElementById('confBbox').textContent = pct + '%';
-        document.getElementById('confBboxBar').style.width = pct + '%';
-        confidences.push(bbox.confidence);
-        addLogEntry(bbox.class, bbox.confidence);
-      }
-
-      if (seg) {
-        document.getElementById('segW').textContent = seg.seg_width_cm != null ? seg.seg_width_cm + ' cm' : '—';
-        document.getElementById('segH').textContent = seg.seg_height_cm != null ? seg.seg_height_cm + ' cm' : '—';
-        document.getElementById('segArea').textContent = seg.seg_area_cm2 != null ? seg.seg_area_cm2 + ' cm²' : '—';
-        const pct = (seg.confidence * 100).toFixed(0);
-        document.getElementById('confSeg').textContent = pct + '%';
-        document.getElementById('confSegBar').style.width = pct + '%';
-        confidences.push(seg.confidence);
-        addLogEntry('Segmentation', seg.confidence);
-      }
-
-      if (confidences.length > 50) confidences = confidences.slice(-50);
-      if (confidences.length > 0) {
-        const avg = confidences.reduce((a, b) => a + b, 0) / confidences.length;
-        document.getElementById('statAvgConf').textContent = (avg * 100).toFixed(0) + '%';
-      }
-
-    } catch(e) {
-      console.error('Detection poll error:', e);
-    }
-  }
-
-  // Initialize on page load
-  initializeVideoFeed();
-  setInterval(pollDetections, 500);
+  // ── Init ────────────────────────────────────────────────────
+  startPolling();
+  // Try connecting to localhost on load — if it fails, demo mode kicks in automatically
+  reconnect();
 </script>
 </body>
 </html>
