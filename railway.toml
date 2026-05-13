@@ -1,0 +1,5 @@
+[build]
+builder = "heroku.buildpacks"
+
+[deploy]
+startCommand = "python edge/roadai.py"
