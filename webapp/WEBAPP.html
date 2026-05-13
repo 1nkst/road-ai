@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RoadAI — Live Detection</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --border: #1e1e1e;
+      --accent: #c8f135;
+      --text: #f0f0f0;
+      --muted: #555;
+      --danger: #ff4d4d;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.4;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 36px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-icon svg { width: 20px; height: 20px; }
+    .logo-text { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; }
+    .logo-text span { color: var(--accent); }
+
+    .status-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem; color: var(--muted);
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .header-time { font-family: 'Space Mono', monospace; font-size: 0.75rem; color: var(--muted); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      height: calc(100vh - 73px);
+    }
+
+    .video-section {
+      padding: 28px 28px 28px 36px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+
+    .video-label {
+      font-size: 0.7rem;
+      font-family: 'Space Mono', monospace;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .video-wrapper {
+      position: relative; flex: 1;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .video-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .corner {
+      position: absolute; width: 20px; height: 20px;
+      border-color: var(--accent); border-style: solid; opacity: 0.7;
+    }
+    .corner.tl { top: 12px; left: 12px; border-width: 2px 0 0 2px; }
+    .corner.tr { top: 12px; right: 12px; border-width: 2px 2px 0 0; }
+    .corner.bl { bottom: 12px; left: 12px; border-width: 0 0 2px 2px; }
+    .corner.br { bottom: 12px; right: 12px; border-width: 0 2px 2px 0; }
+
+    .video-overlay-badge {
+      position: absolute; bottom: 16px; left: 16px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+      padding: 6px 12px; border-radius: 6px;
+      font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .rec-dot {
+      width: 6px; height: 6px;
+      background: var(--danger); border-radius: 50%;
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    .stream-error {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; color: var(--muted);
+      font-family: 'Space Mono', monospace; font-size: 0.75rem; text-align: center;
+    }
+    .stream-error svg { opacity: 0.3; }
+
+    .sidebar {
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    .sidebar-section { padding: 20px; border-bottom: 1px solid var(--border); }
+
+    .sidebar-title {
+      font-size: 0.65rem;
+      font-family: 'Space Mono', monospace;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px;
+    }
+    .stat-value { font-size: 1.4rem; font-weight: 800; color: var(--accent); line-height: 1; margin-bottom: 4px; }
+    .stat-label { font-size: 0.6rem; font-family: 'Space Mono', monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .metric-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px;
+      margin-bottom: 10px;
+    }
+    .metric-block:last-child { margin-bottom: 0; }
+    .metric-block-title {
+      font-size: 0.62rem;
+      font-family: 'Space Mono', monospace;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 10px;
+    }
+    .metric-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-key { font-size: 0.68rem; color: var(--muted); }
+    .metric-val { font-family: 'Space Mono', monospace; font-size: 0.72rem; color: var(--text); font-weight: 700; }
+
+    .conf-item { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+    .conf-item:last-child { margin-bottom: 0; }
+    .conf-header { display: flex; justify-content: space-between; align-items: center; }
+    .conf-name { font-size: 0.72rem; font-weight: 600; }
+    .conf-pct { font-family: 'Space Mono', monospace; font-size: 0.68rem; color: var(--accent); }
+    .conf-bar-bg { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .conf-bar-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.5s ease; }
+
+    .log-section { padding: 20px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
+    .log-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .log-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .log-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
+    .log-dot.pothole { background: var(--danger); }
+    .log-dot.seg { background: var(--accent); }
+    .log-info { flex: 1; }
+    .log-type { font-size: 0.72rem; font-weight: 600; margin-bottom: 2px; }
+    .log-meta { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--muted); }
+    .log-conf { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent); }
+
+    .no-data { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); text-align: center; padding: 20px 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="2.5" stroke-linecap="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+    <div class="logo-text">Road<span>AI</span></div>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot"></div>
+    LIVE STREAM
+  </div>
+  <div class="header-time" id="clock">--:--:--</div>
+</header>
+
+<div class="layout">
+
+  <div class="video-section">
+    <div class="video-label">// CAMERA FEED — REAL-TIME INFERENCE</div>
+    <div class="video-wrapper">
+      <img id="videoFeed" src="http://localhost:5000/video_feed" alt="Live Feed"
+           onerror="showStreamError()" onload="hideStreamError()"/>
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="video-overlay-badge">
+        <div class="rec-dot"></div>
+        REC · LIVE
+      </div>
+      <div class="stream-error" id="streamError" style="display:none;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        Stream unavailable<br/>Start your Python server to connect
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">// Stats</div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="statUptime">0s</div>
+          <div class="stat-label">Uptime</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statAvgConf">—</div>
+          <div class="stat-label">Avg Conf</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">// Predicted Dimensions & Area</div>
+
+      <div class="metric-block">
+        <div class="metric-block-title">▸ Bounding Box</div>
+        <div class="metric-row">
+          <span class="metric-key">Predicted Width</span>
+          <span class="metric-val" id="bboxW">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-key">Predicted Height</span>
+          <span class="metric-val" id="bboxH">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-key">Predicted Area</span>
+          <span class="metric-val" id="bboxArea">—</span>
+        </div>
+      </div>
+
+      <div class="metric-block">
+        <div class="metric-block-title">▸ Segmentation Mask</div>
+        <div class="metric-row">
+          <span class="metric-key">Predicted Width</span>
+          <span class="metric-val" id="segW">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-key">Predicted Height</span>
+          <span class="metric-val" id="segH">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-key">Predicted Area</span>
+          <span class="metric-val" id="segArea">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">// Confidence</div>
+      <div class="conf-item">
+        <div class="conf-header">
+          <span class="conf-name">Pothole (bbox)</span>
+          <span class="conf-pct" id="confBbox">—</span>
+        </div>
+        <div class="conf-bar-bg"><div class="conf-bar-fill" id="confBboxBar" style="width:0%"></div></div>
+      </div>
+      <div class="conf-item">
+        <div class="conf-header">
+          <span class="conf-name">Segmentation</span>
+          <span class="conf-pct" id="confSeg">—</span>
+        </div>
+        <div class="conf-bar-bg"><div class="conf-bar-fill" id="confSegBar" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="log-section">
+      <div class="sidebar-title">// Detection Log</div>
+      <div class="log-list" id="logList">
+        <div class="no-data">Waiting for detections...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function updateClock() {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  const startTime = Date.now();
+  setInterval(() => {
+    const s = Math.floor((Date.now() - startTime) / 1000);
+    const m = Math.floor(s / 60);
+    const h = Math.floor(m / 60);
+    document.getElementById('statUptime').textContent =
+      h > 0 ? `${h}h${m%60}m` : m > 0 ? `${m}m${s%60}s` : `${s}s`;
+  }, 1000);
+
+  function showStreamError() {
+    document.getElementById('streamError').style.display = 'flex';
+    document.getElementById('videoFeed').style.display = 'none';
+  }
+  function hideStreamError() {
+    document.getElementById('streamError').style.display = 'none';
+    document.getElementById('videoFeed').style.display = 'block';
+  }
+
+  function addLogEntry(type, confidence) {
+    const list = document.getElementById('logList');
+    const placeholder = list.querySelector('.no-data');
+    if (placeholder) placeholder.remove();
+
+    const item = document.createElement('div');
+    item.className = 'log-item';
+    item.innerHTML = `
+      <div class="log-dot ${type === 'Segmentation' ? 'seg' : 'pothole'}"></div>
+      <div class="log-info">
+        <div class="log-type">${type}</div>
+        <div class="log-meta">${new Date().toLocaleTimeString()}</div>
+      </div>
+      <div class="log-conf">${(confidence * 100).toFixed(0)}%</div>
+    `;
+    list.insertBefore(item, list.firstChild);
+    while (list.children.length > 20) list.removeChild(list.lastChild);
+  }
+
+  let confidences = [];
+
+  async function pollDetections() {
+    try {
+      const res = await fetch('http://localhost:5000/detections');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.detections || data.detections.length === 0) return;
+
+      const bbox = data.detections.find(d => d.type === 'bbox');
+      const seg = data.detections.find(d => d.type === 'seg');
+
+      if (bbox) {
+        document.getElementById('bboxW').textContent = bbox.bbox_width_cm != null ? bbox.bbox_width_cm + ' cm' : '—';
+        document.getElementById('bboxH').textContent = bbox.bbox_height_cm != null ? bbox.bbox_height_cm + ' cm' : '—';
+        document.getElementById('bboxArea').textContent = bbox.bbox_area_cm2 != null ? bbox.bbox_area_cm2 + ' cm²' : '—';
+        const pct = (bbox.confidence * 100).toFixed(0);
+        document.getElementById('confBbox').textContent = pct + '%';
+        document.getElementById('confBboxBar').style.width = pct + '%';
+        confidences.push(bbox.confidence);
+        addLogEntry(bbox.class, bbox.confidence);
+      }
+
+      if (seg) {
+        document.getElementById('segW').textContent = seg.seg_width_cm != null ? seg.seg_width_cm + ' cm' : '—';
+        document.getElementById('segH').textContent = seg.seg_height_cm != null ? seg.seg_height_cm + ' cm' : '—';
+        document.getElementById('segArea').textContent = seg.seg_area_cm2 != null ? seg.seg_area_cm2 + ' cm²' : '—';
+        const pct = (seg.confidence * 100).toFixed(0);
+        document.getElementById('confSeg').textContent = pct + '%';
+        document.getElementById('confSegBar').style.width = pct + '%';
+        confidences.push(seg.confidence);
+        addLogEntry('Segmentation', seg.confidence);
+      }
+
+      if (confidences.length > 50) confidences = confidences.slice(-50);
+      if (confidences.length > 0) {
+        const avg = confidences.reduce((a, b) => a + b, 0) / confidences.length;
+        document.getElementById('statAvgConf').textContent = (avg * 100).toFixed(0) + '%';
+      }
+
+    } catch(e) {}
+  }
+
+  setInterval(pollDetections, 500);
+</script>
+</body>
+</html>

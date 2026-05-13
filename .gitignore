@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+env/
+
+# Secrets
+*.key
+secrets.py
+
+# OS junk
+.DS_Store
+Thumbs.db
