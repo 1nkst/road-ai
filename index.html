@@ -1,307 +1,144 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>RoadAI — Live Detection</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #0a0a0a;
-      --surface: #111111;
-      --border: #1e1e1e;
-      --accent: #c8f135;
-      --text: #f0f0f0;
-      --muted: #555;
-      --danger: #ff4d4d;
-      --warn: #f5a623;
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0a0a0a;--surface:#111;--surface2:#161616;
+      --border:#1e1e1e;--border2:#2a2a2a;
+      --accent:#c8f135;--accent2:#a8d120;
+      --text:#f0f0f0;--muted:#555;--muted2:#777;
+      --danger:#ff4d4d;--warn:#f5a623;--info:#4da6ff;
     }
-
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Syne', sans-serif;
-      overflow-x: hidden;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: 9999;
-      opacity: 0.4;
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;overflow-x:hidden}
+    body::before{
+      content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.4;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
     }
 
     /* ── Header ── */
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px 36px;
-      border-bottom: 1px solid var(--border);
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .logo { display: flex; align-items: center; gap: 12px; }
-    .logo-icon {
-      width: 36px; height: 36px;
-      background: var(--accent);
-      border-radius: 6px;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .logo-icon svg { width: 20px; height: 20px; }
-    .logo-text { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; }
-    .logo-text span { color: var(--accent); }
-
-    .header-center { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-
-    .status-pill {
-      display: flex; align-items: center; gap: 8px;
-      padding: 6px 14px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      font-family: 'Space Mono', monospace;
-      font-size: 0.7rem; color: var(--muted);
-      transition: all .3s;
-    }
-    .status-pill.connected { border-color: var(--accent); color: var(--accent); }
-    .status-pill.demo-mode { border-color: var(--warn); color: var(--warn); }
-    .status-dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: currentColor;
-      animation: pulse 2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.8); }
-    }
-
-    /* Device URL input */
-    .device-input-wrap {
-      display: flex; align-items: center; gap: 6px;
-    }
-    .device-input-label {
-      font-family: 'Space Mono', monospace;
-      font-size: 0.62rem; color: var(--muted); white-space: nowrap;
-    }
-    .device-input {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 5px 10px;
-      color: var(--text);
-      font-family: 'Space Mono', monospace;
-      font-size: 0.65rem;
-      outline: none;
-      width: 180px;
-      transition: border-color .2s;
-    }
-    .device-input:focus { border-color: var(--accent); }
-    .connect-btn {
-      padding: 5px 12px;
-      background: var(--accent);
-      color: #0a0a0a;
-      border: none;
-      border-radius: 6px;
-      font-family: 'Syne', sans-serif;
-      font-size: 0.7rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background .2s;
-      white-space: nowrap;
-    }
-    .connect-btn:hover { background: #a8d120; }
-
-    .header-time { font-family: 'Space Mono', monospace; font-size: 0.75rem; color: var(--muted); }
+    header{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap}
+    .logo{display:flex;align-items:center;gap:10px}
+    .logo-icon{width:32px;height:32px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center}
+    .logo-icon svg{width:18px;height:18px}
+    .logo-text{font-size:1.2rem;font-weight:800;letter-spacing:-.03em}
+    .logo-text span{color:var(--accent)}
+    .header-center{display:flex;align-items:center;gap:10px}
+    .status-pill{display:flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--border);border-radius:999px;font-family:'Space Mono',monospace;font-size:.65rem;color:var(--muted);transition:all .3s}
+    .status-pill.connected{border-color:var(--accent);color:var(--accent)}
+    .status-pill.demo-mode{border-color:var(--warn);color:var(--warn)}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+    .device-wrap{display:flex;align-items:center;gap:6px}
+    .device-label{font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);white-space:nowrap}
+    .device-input{background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:4px 8px;color:var(--text);font-family:'Space Mono',monospace;font-size:.62rem;outline:none;width:170px;transition:border-color .2s}
+    .device-input:focus{border-color:var(--accent)}
+    .btn{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer;border:none;font-family:'Syne',sans-serif;transition:all .2s}
+    .btn-primary{background:var(--accent);color:#0a0a0a}
+    .btn-primary:hover{background:var(--accent2)}
+    .btn-ghost{background:transparent;color:var(--muted2);border:1px solid var(--border2)}
+    .btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+    .btn-danger{background:transparent;color:var(--danger);border:1px solid rgba(255,77,77,.3)}
+    .btn-danger:hover{background:rgba(255,77,77,.1)}
+    .header-time{font-family:'Space Mono',monospace;font-size:.72rem;color:var(--muted)}
 
     /* ── Layout ── */
-    .layout {
-      display: grid;
-      grid-template-columns: 1fr 300px;
-      height: calc(100vh - 73px);
-    }
+    .layout{display:grid;grid-template-columns:1fr 320px;height:calc(100vh - 57px)}
 
-    .video-section {
-      padding: 28px 28px 28px 36px;
-      display: flex; flex-direction: column; gap: 16px;
-    }
+    /* ── Video panel ── */
+    .video-section{padding:20px 20px 20px 28px;display:flex;flex-direction:column;gap:12px}
+    .video-label{font-size:.65rem;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+    .video-wrapper{position:relative;flex:1;background:#000;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    .video-wrapper img{width:100%;height:100%;object-fit:cover;display:block}
+    .corner{position:absolute;width:18px;height:18px;border-color:var(--accent);border-style:solid;opacity:.7}
+    .corner.tl{top:10px;left:10px;border-width:2px 0 0 2px}
+    .corner.tr{top:10px;right:10px;border-width:2px 2px 0 0}
+    .corner.bl{bottom:10px;left:10px;border-width:0 0 2px 2px}
+    .corner.br{bottom:10px;right:10px;border-width:0 2px 2px 0}
+    .video-badge{position:absolute;bottom:12px;left:12px;background:rgba(0,0,0,.75);border:1px solid var(--border);backdrop-filter:blur(8px);padding:5px 10px;border-radius:6px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--accent);display:flex;align-items:center;gap:7px}
+    .rec-dot{width:5px;height:5px;background:var(--danger);border-radius:50%;animation:pulse 1s ease-in-out infinite}
 
-    .video-label {
-      font-size: 0.7rem;
-      font-family: 'Space Mono', monospace;
-      color: var(--muted);
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-    }
+    /* stream placeholder */
+    .stream-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center}
+    .stream-placeholder-title{font-size:.9rem;font-weight:700;color:var(--warn)}
+    .stream-placeholder-sub{font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);line-height:1.8}
+    .demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;max-width:280px}
+    .demo-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:10px}
+    .demo-card-label{font-size:.55rem;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:3px;text-transform:uppercase}
+    .demo-card-val{font-size:.8rem;font-weight:700;color:var(--accent);font-family:'Space Mono',monospace}
 
-    .video-wrapper {
-      position: relative; flex: 1;
-      background: #000;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-    }
-    .video-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-    .corner {
-      position: absolute; width: 20px; height: 20px;
-      border-color: var(--accent); border-style: solid; opacity: 0.7;
-    }
-    .corner.tl { top: 12px; left: 12px; border-width: 2px 0 0 2px; }
-    .corner.tr { top: 12px; right: 12px; border-width: 2px 2px 0 0; }
-    .corner.bl { bottom: 12px; left: 12px; border-width: 0 0 2px 2px; }
-    .corner.br { bottom: 12px; right: 12px; border-width: 0 2px 2px 0; }
-
-    .video-overlay-badge {
-      position: absolute; bottom: 16px; left: 16px;
-      background: rgba(0,0,0,0.7);
-      border: 1px solid var(--border);
-      backdrop-filter: blur(8px);
-      padding: 6px 12px; border-radius: 6px;
-      font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .rec-dot {
-      width: 6px; height: 6px;
-      background: var(--danger); border-radius: 50%;
-      animation: pulse 1s ease-in-out infinite;
-    }
-    .demo-badge-text { color: var(--warn); }
-
-    /* ── Offline / Demo state ── */
-    .stream-placeholder {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 14px; padding: 32px; text-align: center;
-    }
-    .stream-placeholder-icon { opacity: 0.15; }
-    .stream-placeholder-title {
-      font-size: 1rem; font-weight: 700; color: var(--warn);
-    }
-    .stream-placeholder-sub {
-      font-family: 'Space Mono', monospace;
-      font-size: 0.65rem; color: var(--muted); line-height: 1.8;
-    }
-    .demo-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 320px;
-    }
-    .demo-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px; padding: 12px;
-      text-align: left;
-    }
-    .demo-card-label { font-size: 0.58rem; font-family: 'Space Mono', monospace; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; }
-    .demo-card-val { font-size: 0.85rem; font-weight: 700; color: var(--accent); font-family: 'Space Mono', monospace; }
+    /* ── Session summary bar (below video) ── */
+    .session-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .session-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+    .session-val{font-size:1.3rem;font-weight:800;color:var(--accent);line-height:1;margin-bottom:3px;font-family:'Space Mono',monospace}
+    .session-val.warn{color:var(--warn)}
+    .session-val.danger{color:var(--danger)}
+    .session-label{font-size:.55rem;font-family:'Space Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 
     /* ── Sidebar ── */
-    .sidebar {
-      border-left: 1px solid var(--border);
-      display: flex; flex-direction: column;
-      overflow-y: auto;
-    }
-    .sidebar::-webkit-scrollbar { width: 3px; }
-    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    .sidebar{border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+    .sidebar::-webkit-scrollbar{width:3px}
+    .sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+    .sidebar-section{padding:16px;border-bottom:1px solid var(--border)}
+    .sidebar-title{font-size:.6rem;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px}
 
-    .sidebar-section { padding: 20px; border-bottom: 1px solid var(--border); }
+    /* stats grid */
+    .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:10px}
+    .stat-value{font-size:1.3rem;font-weight:800;color:var(--accent);line-height:1;margin-bottom:3px}
+    .stat-label{font-size:.55rem;font-family:'Space Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 
-    .sidebar-title {
-      font-size: 0.65rem;
-      font-family: 'Space Mono', monospace;
-      color: var(--muted);
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      margin-bottom: 14px;
-    }
+    /* metric blocks */
+    .metric-block{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:8px}
+    .metric-block:last-child{margin-bottom:0}
+    .metric-block-title{font-size:.58rem;font-family:'Space Mono',monospace;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+    .metric-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)}
+    .metric-row:last-child{border-bottom:none}
+    .metric-key{font-size:.63rem;color:var(--muted)}
+    .metric-val{font-family:'Space Mono',monospace;font-size:.68rem;color:var(--text);font-weight:700}
+    .metric-val.accent{color:var(--accent)}
+    .metric-val.warn{color:var(--warn)}
+    .metric-val.danger{color:var(--danger)}
 
-    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px; padding: 12px;
-    }
-    .stat-value { font-size: 1.4rem; font-weight: 800; color: var(--accent); line-height: 1; margin-bottom: 4px; }
-    .stat-label { font-size: 0.6rem; font-family: 'Space Mono', monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    /* confidence bars */
+    .conf-item{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+    .conf-item:last-child{margin-bottom:0}
+    .conf-header{display:flex;justify-content:space-between;align-items:center}
+    .conf-name{font-size:.68rem;font-weight:600}
+    .conf-pct{font-family:'Space Mono',monospace;font-size:.63rem;color:var(--accent)}
+    .conf-bar-bg{height:3px;background:var(--border);border-radius:99px;overflow:hidden}
+    .conf-bar-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .5s ease}
 
-    .metric-block {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px; padding: 14px;
-      margin-bottom: 10px;
-    }
-    .metric-block:last-child { margin-bottom: 0; }
-    .metric-block-title {
-      font-size: 0.62rem;
-      font-family: 'Space Mono', monospace;
-      color: var(--accent);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: 10px;
-    }
-    .metric-row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 5px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .metric-row:last-child { border-bottom: none; }
-    .metric-key { font-size: 0.68rem; color: var(--muted); }
-    .metric-val { font-family: 'Space Mono', monospace; font-size: 0.72rem; color: var(--text); font-weight: 700; }
+    /* severity badge */
+    .sev-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:.58rem;font-weight:700;font-family:'Space Mono',monospace}
+    .sev-low{background:rgba(77,166,255,.15);color:var(--info);border:1px solid rgba(77,166,255,.3)}
+    .sev-medium{background:rgba(245,166,35,.15);color:var(--warn);border:1px solid rgba(245,166,35,.3)}
+    .sev-high{background:rgba(255,77,77,.15);color:var(--danger);border:1px solid rgba(255,77,77,.3)}
 
-    .conf-item { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
-    .conf-item:last-child { margin-bottom: 0; }
-    .conf-header { display: flex; justify-content: space-between; align-items: center; }
-    .conf-name { font-size: 0.72rem; font-weight: 600; }
-    .conf-pct { font-family: 'Space Mono', monospace; font-size: 0.68rem; color: var(--accent); }
-    .conf-bar-bg { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
-    .conf-bar-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.5s ease; }
-
-    .log-section { padding: 20px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
-    .log-list { display: flex; flex-direction: column; gap: 8px; }
-
-    .log-item {
-      display: flex; align-items: flex-start; gap: 10px;
-      padding: 10px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      animation: slideIn 0.3s ease;
-    }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(-6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .log-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
-    .log-dot.pothole { background: var(--danger); }
-    .log-dot.seg { background: var(--accent); }
-    .log-dot.demo { background: var(--warn); }
-    .log-info { flex: 1; }
-    .log-type { font-size: 0.72rem; font-weight: 600; margin-bottom: 2px; }
-    .log-meta { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--muted); }
-    .log-conf { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--accent); }
-
-    .no-data { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); text-align: center; padding: 20px 0; }
-
-    /* Demo mode notice banner */
-    .demo-notice {
-      background: rgba(245,166,35,0.08);
-      border: 1px solid rgba(245,166,35,0.25);
-      border-radius: 6px;
-      padding: 8px 12px;
-      font-family: 'Space Mono', monospace;
-      font-size: 0.6rem;
-      color: var(--warn);
-      line-height: 1.6;
-      margin-bottom: 10px;
-    }
-    .demo-notice strong { display: block; margin-bottom: 2px; }
+    /* log */
+    .log-section{padding:16px;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+    .log-header{display:flex;align-items:center;justify-content:space-between}
+    .log-list{display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1}
+    .log-list::-webkit-scrollbar{width:2px}
+    .log-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+    .log-item{display:flex;align-items:flex-start;gap:8px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:7px;animation:slideIn .25s ease;flex-shrink:0}
+    @keyframes slideIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+    .log-dot{width:7px;height:7px;border-radius:50%;margin-top:3px;flex-shrink:0}
+    .log-dot.pothole{background:var(--danger)}
+    .log-dot.seg{background:var(--accent)}
+    .log-dot.crack{background:var(--info)}
+    .log-dot.demo{background:var(--warn)}
+    .log-info{flex:1;min-width:0}
+    .log-type{font-size:.68rem;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .log-meta{font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted)}
+    .log-cost{font-family:'Space Mono',monospace;font-size:.6rem;color:var(--accent);white-space:nowrap}
+    .no-data{font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);text-align:center;padding:16px 0}
+    .demo-notice{background:rgba(245,166,35,.07);border:1px solid rgba(245,166,35,.2);border-radius:5px;padding:7px 10px;font-family:'Space Mono',monospace;font-size:.58rem;color:var(--warn);line-height:1.6;margin-bottom:8px}
+    .demo-notice strong{display:block;margin-bottom:2px}
   </style>
 </head>
 <body>
@@ -323,11 +160,12 @@
       <div class="status-dot"></div>
       <span id="statusText">CONNECTING...</span>
     </div>
-    <div class="device-input-wrap">
-      <span class="device-input-label">Device IP:</span>
+    <div class="device-wrap">
+      <span class="device-label">Device:</span>
       <input class="device-input" id="deviceUrl" value="http://localhost:5000" placeholder="http://192.168.x.x:5000"/>
-      <button class="connect-btn" onclick="reconnect()">Connect</button>
+      <button class="btn btn-primary" onclick="reconnect()">Connect</button>
     </div>
+    <button class="btn btn-danger" onclick="clearSession()" title="Reset session data">↺ New Session</button>
   </div>
 
   <div class="header-time" id="clock">--:--:--</div>
@@ -338,16 +176,13 @@
   <!-- ── VIDEO PANEL ── -->
   <div class="video-section">
     <div class="video-label" id="videoLabel">// CAMERA FEED — REAL-TIME INFERENCE</div>
+
     <div class="video-wrapper">
+      <img id="videoFeed" src="" alt="" style="display:none" onerror="onStreamError()" onload="onStreamLoad()"/>
 
-      <!-- Live stream img (shown when connected) -->
-      <img id="videoFeed" src="" alt="Live Feed" style="display:none"
-           onerror="onStreamError()" onload="onStreamLoad()"/>
-
-      <!-- Offline / Demo placeholder (shown when disconnected) -->
       <div class="stream-placeholder" id="streamPlaceholder">
-        <div class="stream-placeholder-icon">
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#c8f135" stroke-width="1.2">
+        <div style="opacity:.15">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#c8f135" stroke-width="1.2">
             <rect x="2" y="3" width="20" height="14" rx="2"/>
             <path d="M8 21h8M12 17v4"/>
             <path d="M9 9l3-3 3 3M12 6v6"/>
@@ -356,38 +191,39 @@
         <div class="stream-placeholder-title">DEMO MODE</div>
         <div class="stream-placeholder-sub">
           No device connected.<br/>
-          Enter your device IP above and press Connect.<br/><br/>
-          <span style="color:#333">When running locally: http://localhost:5000</span><br/>
-          <span style="color:#333">On the Pi hotspot: http://192.168.x.x:5000</span>
+          Enter device IP above and press Connect.<br/>
+          <span style="color:#333">Local: http://localhost:5000</span>
         </div>
         <div class="demo-grid">
-          <div class="demo-card">
-            <div class="demo-card-label">Model A</div>
-            <div class="demo-card-val">ROAD AI 9</div>
-          </div>
-          <div class="demo-card">
-            <div class="demo-card-label">Model B</div>
-            <div class="demo-card-val">SEG v2</div>
-          </div>
-          <div class="demo-card">
-            <div class="demo-card-label">mAP@50</div>
-            <div class="demo-card-val">83.1%</div>
-          </div>
-          <div class="demo-card">
-            <div class="demo-card-label">Status</div>
-            <div class="demo-card-val" style="color:var(--warn)">OFFLINE</div>
-          </div>
+          <div class="demo-card"><div class="demo-card-label">Object Det.</div><div class="demo-card-val">ROAD AI 9</div></div>
+          <div class="demo-card"><div class="demo-card-label">Segmentation</div><div class="demo-card-val">SEG v2</div></div>
+          <div class="demo-card"><div class="demo-card-label">mAP@50</div><div class="demo-card-val">83.1%</div></div>
+          <div class="demo-card"><div class="demo-card-label">Status</div><div class="demo-card-val" style="color:var(--warn)">OFFLINE</div></div>
         </div>
       </div>
 
-      <div class="corner tl"></div>
-      <div class="corner tr"></div>
-      <div class="corner bl"></div>
-      <div class="corner br"></div>
+      <div class="corner tl"></div><div class="corner tr"></div>
+      <div class="corner bl"></div><div class="corner br"></div>
+      <div class="video-badge"><div class="rec-dot"></div><span id="recBadgeText">DEMO</span></div>
+    </div>
 
-      <div class="video-overlay-badge" id="recBadge">
-        <div class="rec-dot"></div>
-        <span id="recBadgeText">DEMO</span>
+    <!-- Session summary bar -->
+    <div class="session-bar">
+      <div class="session-card">
+        <div class="session-val" id="sumTotal">0</div>
+        <div class="session-label">Total Detections</div>
+      </div>
+      <div class="session-card">
+        <div class="session-val warn" id="sumCost">฿0</div>
+        <div class="session-label">Est. Repair Cost</div>
+      </div>
+      <div class="session-card">
+        <div class="session-val" id="sumArea">0 m²</div>
+        <div class="session-label">Damaged Area</div>
+      </div>
+      <div class="session-card">
+        <div class="session-val danger" id="sumHigh">0</div>
+        <div class="session-label">High Severity</div>
       </div>
     </div>
   </div>
@@ -395,8 +231,9 @@
   <!-- ── SIDEBAR ── -->
   <div class="sidebar">
 
+    <!-- Stats -->
     <div class="sidebar-section">
-      <div class="sidebar-title">// Stats</div>
+      <div class="sidebar-title">// Session Stats</div>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-value" id="statUptime">0s</div>
@@ -409,65 +246,52 @@
       </div>
     </div>
 
+    <!-- Current detection -->
     <div class="sidebar-section">
-      <div class="sidebar-title">// Predicted Dimensions & Area</div>
+      <div class="sidebar-title">// Current Detection</div>
 
       <div class="metric-block">
         <div class="metric-block-title">▸ Bounding Box</div>
-        <div class="metric-row">
-          <span class="metric-key">Predicted Width</span>
-          <span class="metric-val" id="bboxW">—</span>
-        </div>
-        <div class="metric-row">
-          <span class="metric-key">Predicted Height</span>
-          <span class="metric-val" id="bboxH">—</span>
-        </div>
-        <div class="metric-row">
-          <span class="metric-key">Predicted Area</span>
-          <span class="metric-val" id="bboxArea">—</span>
-        </div>
+        <div class="metric-row"><span class="metric-key">Width</span><span class="metric-val" id="bboxW">—</span></div>
+        <div class="metric-row"><span class="metric-key">Height</span><span class="metric-val" id="bboxH">—</span></div>
+        <div class="metric-row"><span class="metric-key">Area</span><span class="metric-val" id="bboxArea">—</span></div>
       </div>
 
       <div class="metric-block">
         <div class="metric-block-title">▸ Segmentation Mask</div>
-        <div class="metric-row">
-          <span class="metric-key">Predicted Width</span>
-          <span class="metric-val" id="segW">—</span>
-        </div>
-        <div class="metric-row">
-          <span class="metric-key">Predicted Height</span>
-          <span class="metric-val" id="segH">—</span>
-        </div>
-        <div class="metric-row">
-          <span class="metric-key">Predicted Area</span>
-          <span class="metric-val" id="segArea">—</span>
-        </div>
+        <div class="metric-row"><span class="metric-key">Width</span><span class="metric-val" id="segW">—</span></div>
+        <div class="metric-row"><span class="metric-key">Height</span><span class="metric-val" id="segH">—</span></div>
+        <div class="metric-row"><span class="metric-key">Area</span><span class="metric-val" id="segArea">—</span></div>
+      </div>
+
+      <div class="metric-block">
+        <div class="metric-block-title">▸ Assessment</div>
+        <div class="metric-row"><span class="metric-key">Severity</span><span class="metric-val" id="curSeverity">—</span></div>
+        <div class="metric-row"><span class="metric-key">Est. Cost</span><span class="metric-val accent" id="curCost">—</span></div>
+        <div class="metric-row"><span class="metric-key">Damage Type</span><span class="metric-val" id="curClass">—</span></div>
       </div>
     </div>
 
+    <!-- Confidence -->
     <div class="sidebar-section">
       <div class="sidebar-title">// Confidence</div>
       <div class="conf-item">
-        <div class="conf-header">
-          <span class="conf-name">Pothole (bbox)</span>
-          <span class="conf-pct" id="confBbox">—</span>
-        </div>
+        <div class="conf-header"><span class="conf-name">Object Detection</span><span class="conf-pct" id="confBbox">—</span></div>
         <div class="conf-bar-bg"><div class="conf-bar-fill" id="confBboxBar" style="width:0%"></div></div>
       </div>
       <div class="conf-item">
-        <div class="conf-header">
-          <span class="conf-name">Segmentation</span>
-          <span class="conf-pct" id="confSeg">—</span>
-        </div>
+        <div class="conf-header"><span class="conf-name">Segmentation</span><span class="conf-pct" id="confSeg">—</span></div>
         <div class="conf-bar-bg"><div class="conf-bar-fill" id="confSegBar" style="width:0%"></div></div>
       </div>
     </div>
 
+    <!-- Detection log -->
     <div class="log-section">
-      <div class="sidebar-title">// Detection Log</div>
+      <div class="log-header">
+        <div class="sidebar-title" style="margin-bottom:0">// Detection Log</div>
+      </div>
       <div id="demoNotice" class="demo-notice" style="display:none">
-        <strong>⚡ DEMO MODE</strong>
-        Simulated detections shown.<br/>Connect a device to see live data.
+        <strong>⚡ DEMO MODE</strong>Simulated detections. Connect a device for live data.
       </div>
       <div class="log-list" id="logList">
         <div class="no-data">Waiting for detections...</div>
@@ -478,195 +302,232 @@
 </div>
 
 <script>
-  // ── Clock & uptime ──────────────────────────────────────────
-  function updateClock() {
-    document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+// ── Clock & uptime ─────────────────────────────────────────
+function updateClock(){ document.getElementById('clock').textContent = new Date().toLocaleTimeString() }
+setInterval(updateClock, 1000); updateClock();
+
+const startTime = Date.now();
+setInterval(()=>{
+  const s=Math.floor((Date.now()-startTime)/1000);
+  const m=Math.floor(s/60), h=Math.floor(m/60);
+  document.getElementById('statUptime').textContent =
+    h>0?`${h}h${m%60}m`:m>0?`${m}m${s%60}s`:`${s}s`;
+},1000);
+
+// ── Connection state ───────────────────────────────────────
+let deviceUrl   = 'http://localhost:5000';
+let isConnected = false;
+let confidences = [];
+let demoTimer   = null;
+let statsTimer  = null;
+
+function setConnected(v){
+  isConnected = v;
+  const pill  = document.getElementById('statusPill');
+  const text  = document.getElementById('statusText');
+  const feed  = document.getElementById('videoFeed');
+  const ph    = document.getElementById('streamPlaceholder');
+  const badge = document.getElementById('recBadgeText');
+  const notice= document.getElementById('demoNotice');
+
+  if(v){
+    pill.className='status-pill connected';
+    text.textContent='LIVE — '+deviceUrl.replace('http://','');
+    feed.style.display='block'; ph.style.display='none';
+    badge.textContent='REC · LIVE'; notice.style.display='none';
+    stopDemo(); startStatsPolling();
+  } else {
+    pill.className='status-pill demo-mode';
+    text.textContent='DEMO MODE — NO DEVICE';
+    feed.style.display='none'; ph.style.display='flex';
+    badge.textContent='DEMO'; notice.style.display='block';
+    startDemo(); stopStatsPolling();
   }
-  setInterval(updateClock, 1000);
-  updateClock();
+}
 
-  const startTime = Date.now();
-  setInterval(() => {
-    const s = Math.floor((Date.now() - startTime) / 1000);
-    const m = Math.floor(s / 60);
-    const h = Math.floor(m / 60);
-    document.getElementById('statUptime').textContent =
-      h > 0 ? `${h}h${m%60}m` : m > 0 ? `${m}m${s%60}s` : `${s}s`;
-  }, 1000);
+function reconnect(){
+  deviceUrl = document.getElementById('deviceUrl').value.trim().replace(/\/$/,'');
+  document.getElementById('statusPill').className='status-pill';
+  document.getElementById('statusText').textContent='CONNECTING...';
+  document.getElementById('videoFeed').src = deviceUrl+'/video_feed?'+Date.now();
+  fetch(deviceUrl+'/detections',{signal:AbortSignal.timeout(3000)})
+    .then(r=>{ if(r.ok) setConnected(true); else throw new Error(); })
+    .catch(()=>setConnected(false));
+}
 
-  // ── Connection state ────────────────────────────────────────
-  let deviceUrl = 'http://localhost:5000';
-  let isConnected = false;
-  let pollTimer = null;
-  let demoTimer = null;
-  let confidences = [];
+function onStreamLoad(){ setConnected(true) }
+function onStreamError(){ if(isConnected) setConnected(false) }
 
-  function setConnected(connected) {
-    isConnected = connected;
-    const pill = document.getElementById('statusPill');
-    const text = document.getElementById('statusText');
-    const feed = document.getElementById('videoFeed');
-    const placeholder = document.getElementById('streamPlaceholder');
-    const badge = document.getElementById('recBadgeText');
-    const demoNotice = document.getElementById('demoNotice');
+// ── Clear session ──────────────────────────────────────────
+function clearSession(){
+  if(!isConnected) return;
+  fetch(deviceUrl+'/clear',{method:'POST'})
+    .then(()=>{
+      confidences=[];
+      document.getElementById('logList').innerHTML='<div class="no-data">Session cleared. Waiting...</div>';
+      updateSummary({total_detections:0,total_cost_thb:0,total_area_m2:0,severity_counts:{high:0}});
+    }).catch(()=>{});
+}
 
-    if (connected) {
-      pill.className = 'status-pill connected';
-      text.textContent = 'LIVE — ' + deviceUrl.replace('http://', '');
-      feed.style.display = 'block';
-      placeholder.style.display = 'none';
-      badge.textContent = 'REC · LIVE';
-      demoNotice.style.display = 'none';
-      stopDemoMode();
-    } else {
-      pill.className = 'status-pill demo-mode';
-      text.textContent = 'DEMO MODE — NO DEVICE';
-      feed.style.display = 'none';
-      placeholder.style.display = 'flex';
-      badge.textContent = 'DEMO';
-      demoNotice.style.display = 'block';
-      startDemoMode();
+// ── Stats polling ──────────────────────────────────────────
+function startStatsPolling(){
+  if(statsTimer) return;
+  statsTimer = setInterval(pollStats, 2000);
+  pollStats();
+}
+function stopStatsPolling(){
+  if(statsTimer){ clearInterval(statsTimer); statsTimer=null; }
+}
+
+async function pollStats(){
+  try{
+    const r = await fetch(deviceUrl+'/stats',{signal:AbortSignal.timeout(2000)});
+    if(!r.ok) return;
+    const d = await r.json();
+    updateSummary(d);
+    if(d.avg_confidence>0){
+      document.getElementById('statAvgConf').textContent=(d.avg_confidence*100).toFixed(0)+'%';
     }
-  }
+  } catch(e){}
+}
 
-  function reconnect() {
-    deviceUrl = document.getElementById('deviceUrl').value.trim().replace(/\/$/, '');
-    if (!deviceUrl) return;
+function updateSummary(d){
+  document.getElementById('sumTotal').textContent = d.total_detections||0;
+  document.getElementById('sumCost').textContent  = '฿'+(d.total_cost_thb||0).toLocaleString();
+  document.getElementById('sumArea').textContent  = (d.total_area_m2||0).toFixed(2)+' m²';
+  document.getElementById('sumHigh').textContent  = (d.severity_counts&&d.severity_counts.high)||0;
+}
 
-    document.getElementById('statusPill').className = 'status-pill';
-    document.getElementById('statusText').textContent = 'CONNECTING...';
+// ── Detection polling ──────────────────────────────────────
+setInterval(async ()=>{
+  if(!isConnected) return;
+  try{
+    const r = await fetch(deviceUrl+'/detections',{signal:AbortSignal.timeout(2000)});
+    if(!r.ok) throw new Error();
+    const data = await r.json();
+    if(!data.detections||data.detections.length===0) return;
 
-    // Try loading the video feed — if it works we're connected
-    const feed = document.getElementById('videoFeed');
-    feed.src = deviceUrl + '/video_feed?' + Date.now();
+    const bbox = data.detections.find(d=>d.type==='bbox');
+    const seg  = data.detections.find(d=>d.type==='seg');
 
-    // Also try a quick fetch to /detections to verify
-    fetch(deviceUrl + '/detections', { signal: AbortSignal.timeout(3000) })
-      .then(r => { if (r.ok) setConnected(true); else throw new Error(); })
-      .catch(() => setConnected(false));
-  }
+    if(bbox){
+      document.getElementById('bboxW').textContent    = bbox.bbox_width_cm!=null  ? bbox.bbox_width_cm+' cm'  :'—';
+      document.getElementById('bboxH').textContent    = bbox.bbox_height_cm!=null ? bbox.bbox_height_cm+' cm' :'—';
+      document.getElementById('bboxArea').textContent = bbox.bbox_area_cm2!=null  ? bbox.bbox_area_cm2+' cm²' :'—';
+      const pct=(bbox.confidence*100).toFixed(0);
+      document.getElementById('confBbox').textContent   =pct+'%';
+      document.getElementById('confBboxBar').style.width=pct+'%';
+      confidences.push(bbox.confidence);
 
-  function onStreamLoad() { setConnected(true); }
-  function onStreamError() {
-    if (isConnected) setConnected(false);
-  }
-
-  // ── Live detection polling ──────────────────────────────────
-  function startPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(pollDetections, 500);
-  }
-
-  async function pollDetections() {
-    if (!isConnected) return;
-    try {
-      const res = await fetch(deviceUrl + '/detections', { signal: AbortSignal.timeout(2000) });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      if (!data.detections || data.detections.length === 0) return;
-
-      const bbox = data.detections.find(d => d.type === 'bbox');
-      const seg  = data.detections.find(d => d.type === 'seg');
-
-      if (bbox) {
-        document.getElementById('bboxW').textContent    = bbox.bbox_width_cm  != null ? bbox.bbox_width_cm  + ' cm'  : '—';
-        document.getElementById('bboxH').textContent    = bbox.bbox_height_cm != null ? bbox.bbox_height_cm + ' cm'  : '—';
-        document.getElementById('bboxArea').textContent = bbox.bbox_area_cm2  != null ? bbox.bbox_area_cm2  + ' cm²' : '—';
-        const pct = (bbox.confidence * 100).toFixed(0);
-        document.getElementById('confBbox').textContent = pct + '%';
-        document.getElementById('confBboxBar').style.width = pct + '%';
-        confidences.push(bbox.confidence);
-        addLogEntry(bbox.class, bbox.confidence, false);
-      }
-
-      if (seg) {
-        document.getElementById('segW').textContent    = seg.seg_width_cm  != null ? seg.seg_width_cm  + ' cm'  : '—';
-        document.getElementById('segH').textContent    = seg.seg_height_cm != null ? seg.seg_height_cm + ' cm'  : '—';
-        document.getElementById('segArea').textContent = seg.seg_area_cm2  != null ? seg.seg_area_cm2  + ' cm²' : '—';
-        const pct = (seg.confidence * 100).toFixed(0);
-        document.getElementById('confSeg').textContent = pct + '%';
-        document.getElementById('confSegBar').style.width = pct + '%';
-        confidences.push(seg.confidence);
-        addLogEntry('Segmentation', seg.confidence, false);
-      }
-
-      updateAvgConf();
-    } catch(e) {
-      // Connection dropped
-      if (isConnected) setConnected(false);
+      // Assessment
+      document.getElementById('curClass').textContent    = bbox.class||'—';
+      document.getElementById('curSeverity').innerHTML   = sevBadge(bbox.severity);
+      document.getElementById('curCost').textContent     = bbox.cost_thb!=null?'฿'+bbox.cost_thb.toLocaleString():'—';
+      addLogEntry(bbox.class, bbox.confidence, bbox.severity, bbox.cost_thb, false);
     }
-  }
 
-  // ── Demo mode (simulated detections) ───────────────────────
-  const DEMO_CLASSES = ['Pothole','Crack','Surface Damage','Pothole','Segmentation'];
-  const DEMO_METRICS = [
-    { bboxW:'24.3 cm', bboxH:'18.7 cm', bboxArea:'454.4 cm²', segW:'22.1 cm', segH:'17.0 cm', segArea:'375.7 cm²' },
-    { bboxW:'11.2 cm', bboxH:'8.4 cm',  bboxArea:'94.1 cm²',  segW:'10.8 cm', segH:'7.9 cm',  segArea:'85.3 cm²' },
-    { bboxW:'38.0 cm', bboxH:'29.5 cm', bboxArea:'1121 cm²',  segW:'35.6 cm', segH:'27.2 cm', segArea:'968.3 cm²' },
-  ];
+    if(seg){
+      document.getElementById('segW').textContent    = seg.seg_width_cm!=null  ? seg.seg_width_cm+' cm'  :'—';
+      document.getElementById('segH').textContent    = seg.seg_height_cm!=null ? seg.seg_height_cm+' cm' :'—';
+      document.getElementById('segArea').textContent = seg.seg_area_cm2!=null  ? seg.seg_area_cm2+' cm²' :'—';
+      const pct=(seg.confidence*100).toFixed(0);
+      document.getElementById('confSeg').textContent   =pct+'%';
+      document.getElementById('confSegBar').style.width=pct+'%';
+      confidences.push(seg.confidence);
+    }
 
-  function startDemoMode() {
-    if (demoTimer) return;
-    demoTimer = setInterval(() => {
-      const cls  = DEMO_CLASSES[Math.floor(Math.random() * DEMO_CLASSES.length)];
-      const conf = 0.68 + Math.random() * 0.28;
-      const m    = DEMO_METRICS[Math.floor(Math.random() * DEMO_METRICS.length)];
+    if(confidences.length>50) confidences=confidences.slice(-50);
+    if(confidences.length>0){
+      const avg=confidences.reduce((a,b)=>a+b,0)/confidences.length;
+      document.getElementById('statAvgConf').textContent=(avg*100).toFixed(0)+'%';
+    }
+  } catch(e){ if(isConnected) setConnected(false); }
+}, 500);
 
-      document.getElementById('bboxW').textContent    = m.bboxW;
-      document.getElementById('bboxH').textContent    = m.bboxH;
-      document.getElementById('bboxArea').textContent = m.bboxArea;
-      document.getElementById('segW').textContent     = m.segW;
-      document.getElementById('segH').textContent     = m.segH;
-      document.getElementById('segArea').textContent  = m.segArea;
+// ── Severity badge ─────────────────────────────────────────
+function sevBadge(sev){
+  if(!sev) return '—';
+  const map={low:'sev-low',medium:'sev-medium',high:'sev-high'};
+  const label={low:'LOW',medium:'MEDIUM',high:'HIGH'};
+  return `<span class="sev-badge ${map[sev]||'sev-low'}">${label[sev]||sev.toUpperCase()}</span>`;
+}
 
-      const pct = (conf * 100).toFixed(0);
-      document.getElementById('confBbox').textContent    = pct + '%';
-      document.getElementById('confBboxBar').style.width = pct + '%';
-      document.getElementById('confSeg').textContent     = pct + '%';
-      document.getElementById('confSegBar').style.width  = pct + '%';
+// ── Log entries ────────────────────────────────────────────
+function addLogEntry(type, confidence, severity, cost, isDemo){
+  const list = document.getElementById('logList');
+  const placeholder = list.querySelector('.no-data');
+  if(placeholder) placeholder.remove();
 
-      confidences.push(conf);
-      updateAvgConf();
-      addLogEntry(cls, conf, true);
-    }, 2200);
-  }
+  const dotClass = isDemo?'demo':
+    type&&type.toLowerCase().includes('seg')?'seg':
+    type&&type.toLowerCase().includes('crack')?'crack':'pothole';
 
-  function stopDemoMode() {
-    if (demoTimer) { clearInterval(demoTimer); demoTimer = null; }
-  }
+  const item = document.createElement('div');
+  item.className='log-item';
+  item.innerHTML=`
+    <div class="log-dot ${dotClass}"></div>
+    <div class="log-info">
+      <div class="log-type">${type}${isDemo?' <span style="font-size:.5rem;color:var(--warn)">[DEMO]</span>':''}</div>
+      <div class="log-meta">${new Date().toLocaleTimeString()} · ${sevBadge(severity)}</div>
+    </div>
+    <div class="log-cost">${cost!=null?'฿'+cost.toLocaleString():'—'}</div>`;
+  list.insertBefore(item, list.firstChild);
+  while(list.children.length>30) list.removeChild(list.lastChild);
+}
 
-  // ── Helpers ─────────────────────────────────────────────────
-  function updateAvgConf() {
-    if (confidences.length > 50) confidences = confidences.slice(-50);
-    const avg = confidences.reduce((a, b) => a + b, 0) / confidences.length;
-    document.getElementById('statAvgConf').textContent = (avg * 100).toFixed(0) + '%';
-  }
+// ── Demo mode ──────────────────────────────────────────────
+const DEMO_DATA = [
+  {type:'bbox',class:'Pothole',confidence:.91,severity:'high',cost_thb:2380,bbox_width_cm:28.4,bbox_height_cm:22.1,bbox_area_cm2:627.6},
+  {type:'seg', class:'Segmentation',confidence:.88,severity:'high',seg_width_cm:26.2,seg_height_cm:20.8,seg_area_cm2:544.9},
+  {type:'bbox',class:'Longitudinal Crack',confidence:.79,severity:'medium',cost_thb:420,bbox_width_cm:12.1,bbox_height_cm:8.4,bbox_area_cm2:101.6},
+  {type:'bbox',class:'Surface Damage',confidence:.73,severity:'low',cost_thb:180,bbox_width_cm:7.2,bbox_height_cm:5.8,bbox_area_cm2:41.7},
+];
+let demoIdx=0, demoCost=0, demoTotal=0, demoHigh=0;
 
-  function addLogEntry(type, confidence, isDemo) {
-    const list = document.getElementById('logList');
-    const placeholder = list.querySelector('.no-data');
-    if (placeholder) placeholder.remove();
+function startDemo(){
+  if(demoTimer) return;
+  demoTimer=setInterval(()=>{
+    const d=DEMO_DATA[demoIdx%DEMO_DATA.length]; demoIdx++;
+    const bbox=d.type==='bbox'?d:null;
+    const seg =d.type==='seg'?d:null;
+    if(bbox){
+      document.getElementById('bboxW').textContent    = bbox.bbox_width_cm+' cm';
+      document.getElementById('bboxH').textContent    = bbox.bbox_height_cm+' cm';
+      document.getElementById('bboxArea').textContent = bbox.bbox_area_cm2+' cm²';
+      const pct=(bbox.confidence*100).toFixed(0);
+      document.getElementById('confBbox').textContent   =pct+'%';
+      document.getElementById('confBboxBar').style.width=pct+'%';
+      document.getElementById('curClass').textContent   =bbox.class;
+      document.getElementById('curSeverity').innerHTML  =sevBadge(bbox.severity);
+      document.getElementById('curCost').textContent    ='฿'+bbox.cost_thb.toLocaleString();
+      demoTotal++; demoCost+=bbox.cost_thb;
+      if(bbox.severity==='high') demoHigh++;
+      addLogEntry(bbox.class,bbox.confidence,bbox.severity,bbox.cost_thb,true);
+    }
+    if(seg){
+      document.getElementById('segW').textContent    = seg.seg_width_cm+' cm';
+      document.getElementById('segH').textContent    = seg.seg_height_cm+' cm';
+      document.getElementById('segArea').textContent = seg.seg_area_cm2+' cm²';
+      const pct=(seg.confidence*100).toFixed(0);
+      document.getElementById('confSeg').textContent   =pct+'%';
+      document.getElementById('confSegBar').style.width=pct+'%';
+    }
+    document.getElementById('sumTotal').textContent=demoTotal;
+    document.getElementById('sumCost').textContent ='฿'+demoCost.toLocaleString();
+    document.getElementById('sumHigh').textContent =demoHigh;
+    confidences.push(d.confidence);
+    if(confidences.length>50) confidences=confidences.slice(-50);
+    const avg=confidences.reduce((a,b)=>a+b,0)/confidences.length;
+    document.getElementById('statAvgConf').textContent=(avg*100).toFixed(0)+'%';
+  },2500);
+}
 
-    const dotClass = isDemo ? 'demo' : type === 'Segmentation' ? 'seg' : 'pothole';
+function stopDemo(){
+  if(demoTimer){clearInterval(demoTimer);demoTimer=null;}
+}
 
-    const item = document.createElement('div');
-    item.className = 'log-item';
-    item.innerHTML = `
-      <div class="log-dot ${dotClass}"></div>
-      <div class="log-info">
-        <div class="log-type">${type}${isDemo ? ' <span style="font-size:.55rem;color:var(--warn)">[DEMO]</span>' : ''}</div>
-        <div class="log-meta">${new Date().toLocaleTimeString()}</div>
-      </div>
-      <div class="log-conf">${(confidence * 100).toFixed(0)}%</div>
-    `;
-    list.insertBefore(item, list.firstChild);
-    while (list.children.length > 20) list.removeChild(list.lastChild);
-  }
-
-  // ── Init ────────────────────────────────────────────────────
-  startPolling();
-  // Try connecting to localhost on load — if it fails, demo mode kicks in automatically
-  reconnect();
+// ── Init ───────────────────────────────────────────────────
+window.addEventListener('load',()=>setTimeout(reconnect,200));
 </script>
 </body>
 </html>
