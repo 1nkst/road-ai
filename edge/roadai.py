@@ -7,7 +7,7 @@ import time
 import os
 from collections import deque
 from datetime import datetime
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -52,6 +52,7 @@ detection_history  = deque(maxlen=500)   # rolling history for session log
 session_start      = time.time()
 lock               = threading.Lock()
 running            = True
+detection_mode     = "auto"              # "auto" = continuous | "manual" = capture on demand
 
 app = Flask(__name__)
 CORS(app)
@@ -131,12 +132,80 @@ def upload_to_cloud(detections):
         print(f"[Cloud] {e}")
 
 
-# ── Inference worker ──────────────────────────────────────────
+# ── Inference core (shared by auto worker + manual capture) ──
+def infer_frame(frame, source="auto"):
+    """Run inference on a single frame.
+    Returns (outputs, detections) — outputs for drawing, detections with metrics."""
+    url = f"{API_URL}/{WORKSPACE}/workflows/{WORKFLOW_ID}"
+    payload = {
+        "api_key":  API_KEY,
+        "inputs":   {"image": {"type": "base64", "value": encode_frame(frame)}},
+        "use_cache": False,
+    }
+    response = requests.post(url, json=payload, timeout=10)
+    if not response.ok:
+        return None, []
+
+    result  = response.json()
+    outputs = result.get("outputs", [{}])[0]
+    detections = []
+
+    bbox_preds = outputs.get("predictions",         {}).get("predictions", [])
+    seg_preds  = outputs.get("model_1_predictions", {}).get("predictions", [])
+
+    for pred in seg_preds:
+        for p in pred["points"]:
+            p["x"] *= SX
+            p["y"] *= SY
+    for pred in bbox_preds:
+        pred["x"]      *= SX
+        pred["y"]      *= SY
+        pred["width"]  *= SX
+        pred["height"] *= SY
+
+    bbox    = bbox_preds[0] if bbox_preds else None
+    seg     = seg_preds[0]  if seg_preds  else None
+    metrics = calculate_metrics(pred_bbox=bbox, pred_seg=seg)
+
+    if bbox:
+        det = {
+            "class":      bbox["class"],
+            "confidence": round(bbox["confidence"], 3),
+            "type":       "bbox",
+            "source":     source,
+            "timestamp":  time.time(),
+            **metrics,
+        }
+        det["severity"] = severity(det)
+        det.update(estimate_cost(det))
+        detections.append(det)
+
+    if seg:
+        det = {
+            "class":      "Segmentation",
+            "confidence": round(seg["confidence"], 3),
+            "type":       "seg",
+            "source":     source,
+            "timestamp":  time.time(),
+            **metrics,
+        }
+        det["severity"] = severity(det)
+        det.update(estimate_cost(det))
+        detections.append(det)
+
+    return outputs, detections
+
+
+# ── Inference worker (AUTO mode only) ─────────────────────────
 def inference_worker():
     global latest_annotations, latest_detections
-    url = f"{API_URL}/{WORKSPACE}/workflows/{WORKFLOW_ID}"
 
     while running:
+        # In MANUAL mode the worker idles — detection only happens via /capture
+        if detection_mode != "auto":
+            time.sleep(0.1)
+            continue
+
         with lock:
             frame = latest_frame.copy() if latest_frame is not None else None
         if frame is None:
@@ -144,59 +213,9 @@ def inference_worker():
             continue
 
         try:
-            payload = {
-                "api_key":  API_KEY,
-                "inputs":   {"image": {"type": "base64", "value": encode_frame(frame)}},
-                "use_cache": False,
-            }
-            response = requests.post(url, json=payload, timeout=5)
-            if not response.ok:
+            outputs, detections = infer_frame(frame, source="auto")
+            if outputs is None:
                 continue
-
-            result  = response.json()
-            outputs = result.get("outputs", [{}])[0]
-            detections = []
-
-            bbox_preds = outputs.get("predictions",         {}).get("predictions", [])
-            seg_preds  = outputs.get("model_1_predictions", {}).get("predictions", [])
-
-            for pred in seg_preds:
-                for p in pred["points"]:
-                    p["x"] *= SX
-                    p["y"] *= SY
-            for pred in bbox_preds:
-                pred["x"]      *= SX
-                pred["y"]      *= SY
-                pred["width"]  *= SX
-                pred["height"] *= SY
-
-            bbox    = bbox_preds[0] if bbox_preds else None
-            seg     = seg_preds[0]  if seg_preds  else None
-            metrics = calculate_metrics(pred_bbox=bbox, pred_seg=seg)
-
-            if bbox:
-                det = {
-                    "class":      bbox["class"],
-                    "confidence": round(bbox["confidence"], 3),
-                    "type":       "bbox",
-                    "timestamp":  time.time(),
-                    **metrics,
-                }
-                det["severity"] = severity(det)
-                det.update(estimate_cost(det))
-                detections.append(det)
-
-            if seg:
-                det = {
-                    "class":      "Segmentation",
-                    "confidence": round(seg["confidence"], 3),
-                    "type":       "seg",
-                    "timestamp":  time.time(),
-                    **metrics,
-                }
-                det["severity"] = severity(det)
-                det.update(estimate_cost(det))
-                detections.append(det)
 
             with lock:
                 latest_annotations = outputs
@@ -344,6 +363,68 @@ def clear_session():
     return jsonify({"cleared": True})
 
 
+@app.route("/mode", methods=["GET", "POST"])
+def mode():
+    """Get or set detection mode: 'auto' (continuous) or 'manual' (capture on demand)."""
+    global detection_mode, latest_annotations, latest_detections
+
+    if request.method == "POST":
+        new_mode = (request.get_json(silent=True) or {}).get("mode", "").lower()
+        if new_mode not in ("auto", "manual"):
+            return jsonify({"error": "mode must be 'auto' or 'manual'"}), 400
+        with lock:
+            detection_mode = new_mode
+            # Clear stale overlays when entering manual mode
+            if new_mode == "manual":
+                latest_annotations = None
+                latest_detections  = []
+        print(f"[Mode] switched to {new_mode.upper()}")
+
+    return jsonify({"mode": detection_mode})
+
+
+@app.route("/capture", methods=["POST"])
+def capture():
+    """MANUAL mode: freeze the current frame, run detection on it once,
+    store results in history, and return the annotated frame + detections."""
+    global latest_annotations, latest_detections
+
+    with lock:
+        frame = latest_frame.copy() if latest_frame is not None else None
+    if frame is None:
+        return jsonify({"error": "no frame available from camera"}), 503
+
+    try:
+        outputs, detections = infer_frame(frame, source="manual")
+    except Exception as e:
+        return jsonify({"error": f"inference failed: {e}"}), 502
+
+    if outputs is None:
+        return jsonify({"error": "inference server returned an error"}), 502
+
+    # Store in history (auto-add to database as requested)
+    with lock:
+        latest_annotations = outputs
+        latest_detections  = detections
+        if detections:
+            detection_history.extend(detections)
+
+    if detections and CLOUD_URL:
+        threading.Thread(target=upload_to_cloud, args=(detections,), daemon=True).start()
+
+    # Return the annotated captured frame so the UI can show the frozen result
+    annotated = draw_annotations(frame.copy(), outputs)
+    _, buffer = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    frame_b64 = base64.b64encode(buffer).decode("utf-8")
+
+    return jsonify({
+        "captured":   True,
+        "detections": detections,
+        "count":      len(detections),
+        "frame":      f"data:image/jpeg;base64,{frame_b64}",
+    })
+
+
 @app.after_request
 def add_cors(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
@@ -366,6 +447,8 @@ if __name__ == "__main__":
     print("  /history     — full session log")
     print("  /stats       — session summary")
     print("  /clear       — reset session (POST)")
+    print("  /mode        — get/set AUTO|MANUAL mode (GET/POST)")
+    print("  /capture     — manual capture & detect (POST)")
     print("=" * 50)
 
     app.run(host="0.0.0.0", port=5000, threaded=True)

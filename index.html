@@ -139,6 +139,32 @@
     .no-data{font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);text-align:center;padding:16px 0}
     .demo-notice{background:rgba(245,166,35,.07);border:1px solid rgba(245,166,35,.2);border-radius:5px;padding:7px 10px;font-family:'Space Mono',monospace;font-size:.58rem;color:var(--warn);line-height:1.6;margin-bottom:8px}
     .demo-notice strong{display:block;margin-bottom:2px}
+
+    /* ── Mode toggle (AUTO / MANUAL) ── */
+    .mode-toggle{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:999px;padding:3px;gap:2px}
+    .mode-opt{padding:4px 14px;border-radius:999px;font-family:'Space Mono',monospace;font-size:.6rem;font-weight:700;color:var(--muted);cursor:pointer;user-select:none;transition:all .2s;letter-spacing:.05em}
+    .mode-opt.active{background:var(--accent);color:#0a0a0a}
+    .mode-opt:not(.active):hover{color:var(--text)}
+
+    /* ── Capture button (MANUAL mode) ── */
+    .capture-bar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:none;z-index:5}
+    .capture-bar.visible{display:block}
+    .btn-capture{display:flex;align-items:center;gap:10px;padding:12px 28px;border-radius:999px;background:var(--accent);color:#0a0a0a;border:none;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:800;cursor:pointer;box-shadow:0 4px 24px rgba(200,241,53,.35);transition:all .2s;letter-spacing:.02em}
+    .btn-capture:hover{background:var(--accent2);transform:scale(1.04)}
+    .btn-capture:active{transform:scale(.97)}
+    .btn-capture:disabled{opacity:.55;cursor:wait;transform:none}
+    .capture-ring{width:14px;height:14px;border:2.5px solid #0a0a0a;border-radius:50%;flex-shrink:0}
+    .btn-capture.detecting .capture-ring{border-top-color:transparent;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── Frozen capture overlay ── */
+    .captured-overlay{position:absolute;inset:0;display:none;z-index:4;background:#000}
+    .captured-overlay.visible{display:block}
+    .captured-overlay img{width:100%;height:100%;object-fit:cover}
+    .captured-badge{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(10,10,10,.85);border:1px solid var(--accent);color:var(--accent);backdrop-filter:blur(8px);padding:6px 16px;border-radius:999px;font-family:'Space Mono',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;display:flex;align-items:center;gap:8px}
+    .captured-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:6}
+    .captured-flash.flash{animation:flashAnim .35s ease-out}
+    @keyframes flashAnim{0%{opacity:.85}100%{opacity:0}}
   </style>
 </head>
 <body>
@@ -159,6 +185,10 @@
     <div class="status-pill" id="statusPill">
       <div class="status-dot"></div>
       <span id="statusText">CONNECTING...</span>
+    </div>
+    <div class="mode-toggle" id="modeToggle" title="Detection mode">
+      <div class="mode-opt active" id="modeAuto" onclick="setMode('auto')">AUTO</div>
+      <div class="mode-opt" id="modeManual" onclick="setMode('manual')">MANUAL</div>
     </div>
     <div class="device-wrap">
       <span class="device-label">Device:</span>
@@ -205,6 +235,21 @@
       <div class="corner tl"></div><div class="corner tr"></div>
       <div class="corner bl"></div><div class="corner br"></div>
       <div class="video-badge"><div class="rec-dot"></div><span id="recBadgeText">DEMO</span></div>
+
+      <!-- MANUAL mode: frozen capture result -->
+      <div class="captured-overlay" id="capturedOverlay">
+        <img id="capturedImg" src="" alt=""/>
+        <div class="captured-badge"><span>📸</span><span id="capturedBadgeText">CAPTURED</span></div>
+      </div>
+      <div class="captured-flash" id="capturedFlash"></div>
+
+      <!-- MANUAL mode: capture button -->
+      <div class="capture-bar" id="captureBar">
+        <button class="btn-capture" id="btnCapture" onclick="captureDetect()">
+          <span class="capture-ring"></span>
+          <span id="btnCaptureText">CAPTURE &amp; DETECT</span>
+        </button>
+      </div>
     </div>
 
     <!-- Session summary bar -->
@@ -320,6 +365,129 @@ let isConnected = false;
 let confidences = [];
 let demoTimer   = null;
 let statsTimer  = null;
+let detectionMode = 'auto';   // 'auto' | 'manual'
+let capturing     = false;
+
+// ── Mode toggle (AUTO / MANUAL) ────────────────────────────
+async function setMode(m){
+  if(m === detectionMode) return;
+  detectionMode = m;
+
+  document.getElementById('modeAuto').classList.toggle('active',   m==='auto');
+  document.getElementById('modeManual').classList.toggle('active', m==='manual');
+  document.getElementById('captureBar').classList.toggle('visible', m==='manual');
+  document.getElementById('videoLabel').textContent = m==='manual'
+    ? '// CAMERA FEED — MANUAL CAPTURE MODE'
+    : '// CAMERA FEED — REAL-TIME INFERENCE';
+  hideCapturedOverlay();
+
+  // Demo mode: toggle simulated detections off in manual
+  if(!isConnected){
+    if(m==='manual') stopDemo(); else startDemo();
+    return;
+  }
+
+  // Sync mode to backend
+  try{
+    await fetch(deviceUrl+'/mode',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:m}),
+      signal:AbortSignal.timeout(3000)
+    });
+  }catch(e){ console.warn('Mode sync failed', e); }
+}
+
+// ── Manual capture ─────────────────────────────────────────
+async function captureDetect(){
+  if(capturing) return;
+  capturing = true;
+  const btn  = document.getElementById('btnCapture');
+  const txt  = document.getElementById('btnCaptureText');
+  btn.disabled = true;
+  btn.classList.add('detecting');
+  txt.textContent = 'DETECTING...';
+
+  // flash effect
+  const flash = document.getElementById('capturedFlash');
+  flash.classList.remove('flash'); void flash.offsetWidth; flash.classList.add('flash');
+
+  // Demo mode: simulate one detection
+  if(!isConnected){
+    setTimeout(()=>{
+      const d = DEMO_DATA[demoIdx%DEMO_DATA.length]; demoIdx++;
+      if(d.type==='bbox'){
+        addLogEntry(d.class, d.confidence, d.severity, d.cost_thb, true);
+        document.getElementById('curClass').textContent  = d.class;
+        document.getElementById('curSeverity').innerHTML = sevBadge(d.severity);
+        document.getElementById('curCost').textContent   = '฿'+d.cost_thb.toLocaleString();
+      }
+      finishCapture(btn, txt);
+    }, 700);
+    return;
+  }
+
+  try{
+    const r = await fetch(deviceUrl+'/capture',{
+      method:'POST',
+      signal:AbortSignal.timeout(15000)
+    });
+    if(!r.ok) throw new Error('capture failed');
+    const data = await r.json();
+
+    // Show the frozen annotated frame
+    if(data.frame){
+      document.getElementById('capturedImg').src = data.frame;
+      document.getElementById('capturedBadgeText').textContent =
+        data.count>0 ? `CAPTURED — ${data.count} DETECTION${data.count>1?'S':''}` : 'CAPTURED — NO DAMAGE FOUND';
+      document.getElementById('capturedOverlay').classList.add('visible');
+      setTimeout(hideCapturedOverlay, 3000);
+    }
+
+    // Update sidebar + log from the result
+    const bbox = (data.detections||[]).find(d=>d.type==='bbox');
+    const seg  = (data.detections||[]).find(d=>d.type==='seg');
+    if(bbox){
+      document.getElementById('bboxW').textContent    = bbox.bbox_width_cm!=null  ? bbox.bbox_width_cm+' cm'  :'—';
+      document.getElementById('bboxH').textContent    = bbox.bbox_height_cm!=null ? bbox.bbox_height_cm+' cm' :'—';
+      document.getElementById('bboxArea').textContent = bbox.bbox_area_cm2!=null  ? bbox.bbox_area_cm2+' cm²' :'—';
+      const pct=(bbox.confidence*100).toFixed(0);
+      document.getElementById('confBbox').textContent   =pct+'%';
+      document.getElementById('confBboxBar').style.width=pct+'%';
+      document.getElementById('curClass').textContent    = bbox.class||'—';
+      document.getElementById('curSeverity').innerHTML   = sevBadge(bbox.severity);
+      document.getElementById('curCost').textContent     = bbox.cost_thb!=null?'฿'+bbox.cost_thb.toLocaleString():'—';
+      addLogEntry(bbox.class, bbox.confidence, bbox.severity, bbox.cost_thb, false);
+      confidences.push(bbox.confidence);
+    }
+    if(seg){
+      document.getElementById('segW').textContent    = seg.seg_width_cm!=null  ? seg.seg_width_cm+' cm'  :'—';
+      document.getElementById('segH').textContent    = seg.seg_height_cm!=null ? seg.seg_height_cm+' cm' :'—';
+      document.getElementById('segArea').textContent = seg.seg_area_cm2!=null  ? seg.seg_area_cm2+' cm²' :'—';
+      const pct=(seg.confidence*100).toFixed(0);
+      document.getElementById('confSeg').textContent   =pct+'%';
+      document.getElementById('confSegBar').style.width=pct+'%';
+      confidences.push(seg.confidence);
+    }
+    pollStats();
+  }catch(e){
+    document.getElementById('capturedBadgeText').textContent = 'CAPTURE FAILED';
+    console.warn(e);
+  }finally{
+    finishCapture(btn, txt);
+  }
+}
+
+function finishCapture(btn, txt){
+  capturing = false;
+  btn.disabled = false;
+  btn.classList.remove('detecting');
+  txt.textContent = 'CAPTURE & DETECT';
+}
+
+function hideCapturedOverlay(){
+  document.getElementById('capturedOverlay').classList.remove('visible');
+}
 
 function setConnected(v){
   isConnected = v;
@@ -352,7 +520,16 @@ function reconnect(){
   document.getElementById('videoFeed').src = deviceUrl+'/video_feed?'+Date.now();
   fetch(deviceUrl+'/detections',{signal:AbortSignal.timeout(3000)})
     .then(r=>{ if(r.ok) setConnected(true); else throw new Error(); })
-    .catch(()=>setConnected(false));
+    .then(()=>{
+      // Sync current UI mode to the device
+      return fetch(deviceUrl+'/mode',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({mode:detectionMode}),
+        signal:AbortSignal.timeout(3000)
+      });
+    })
+    .catch(()=>{ if(!isConnected) setConnected(false); });
 }
 
 function onStreamLoad(){ setConnected(true) }
@@ -398,9 +575,9 @@ function updateSummary(d){
   document.getElementById('sumHigh').textContent  = (d.severity_counts&&d.severity_counts.high)||0;
 }
 
-// ── Detection polling ──────────────────────────────────────
+// ── Detection polling (AUTO mode only) ─────────────────────
 setInterval(async ()=>{
-  if(!isConnected) return;
+  if(!isConnected || detectionMode==='manual') return;
   try{
     const r = await fetch(deviceUrl+'/detections',{signal:AbortSignal.timeout(2000)});
     if(!r.ok) throw new Error();
@@ -485,7 +662,7 @@ const DEMO_DATA = [
 let demoIdx=0, demoCost=0, demoTotal=0, demoHigh=0;
 
 function startDemo(){
-  if(demoTimer) return;
+  if(demoTimer || detectionMode==='manual') return;
   demoTimer=setInterval(()=>{
     const d=DEMO_DATA[demoIdx%DEMO_DATA.length]; demoIdx++;
     const bbox=d.type==='bbox'?d:null;
