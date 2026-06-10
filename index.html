@@ -253,8 +253,8 @@
       <span id="statusText">CONNECTING...</span>
     </div>
     <div class="mode-toggle" id="modeToggle" title="Detection mode">
-      <div class="mode-opt active" id="modeAuto" onclick="setMode('auto')">AUTO</div>
-      <div class="mode-opt" id="modeManual" onclick="setMode('manual')">MANUAL</div>
+      <div class="mode-opt" id="modeAuto" onclick="setMode('auto')">AUTO</div>
+      <div class="mode-opt active" id="modeManual" onclick="setMode('manual')">MANUAL</div>
     </div>
     <div class="device-wrap">
       <span class="device-label">Device:</span>
@@ -284,7 +284,7 @@
 
   <!-- ── VIDEO PANEL ── -->
   <div class="video-section">
-    <div class="video-label" id="videoLabel">// CAMERA FEED — REAL-TIME INFERENCE</div>
+    <div class="video-label" id="videoLabel">// CAMERA FEED — MANUAL CAPTURE MODE</div>
 
     <div class="video-wrapper">
       <img id="videoFeed" src="" alt="" style="display:none" onerror="onStreamError()" onload="onStreamLoad()"/>
@@ -323,7 +323,7 @@
       <div class="captured-flash" id="capturedFlash"></div>
 
       <!-- MANUAL mode: capture button -->
-      <div class="capture-bar" id="captureBar">
+      <div class="capture-bar visible" id="captureBar">
         <button class="btn-capture" id="btnCapture" onclick="captureDetect()">
           <span class="capture-ring"></span>
           <span id="btnCaptureText">CAPTURE &amp; DETECT</span>
@@ -524,7 +524,7 @@ let isConnected = false;
 let confidences = [];
 let demoTimer   = null;
 let statsTimer  = null;
-let detectionMode = 'auto';   // 'auto' | 'manual'
+let detectionMode = 'manual';   // 'auto' | 'manual'
 let capturing     = false;
 
 // ── Mode toggle (AUTO / MANUAL) ────────────────────────────
