@@ -265,15 +265,14 @@ def inference_worker():
             if outputs is None:
                 continue
 
-            event = build_event(frame, outputs, detections, "auto") if detections else None
-
+            # NOTE: AUTO detections feed live stats only — they are NOT added to
+            # damage_events (the history list). Only MANUAL captures are recorded,
+            # to keep the reviewer's list free of auto false positives.
             with lock:
                 latest_annotations = outputs
                 latest_detections  = detections
                 if detections:
                     detection_history.extend(detections)
-                if event:
-                    damage_events.append(event)
 
             if detections and CLOUD_URL:
                 threading.Thread(target=upload_to_cloud, args=(detections,), daemon=True).start()
