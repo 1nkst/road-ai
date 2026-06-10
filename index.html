@@ -165,6 +165,72 @@
     .captured-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:6}
     .captured-flash.flash{animation:flashAnim .35s ease-out}
     @keyframes flashAnim{0%{opacity:.85}100%{opacity:0}}
+
+    /* ── View tabs (Live / History) ── */
+    .view-tabs{display:flex;gap:4px;padding:0 28px;border-bottom:1px solid var(--border);background:var(--bg)}
+    .view-tab{padding:11px 18px;font-family:'Space Mono',monospace;font-size:.65rem;font-weight:700;letter-spacing:.08em;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s;text-transform:uppercase;display:flex;align-items:center;gap:7px}
+    .view-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .view-tab:not(.active):hover{color:var(--text)}
+    .view-tab .count-pill{background:var(--surface2);border:1px solid var(--border2);border-radius:999px;padding:1px 7px;font-size:.6rem;color:var(--text)}
+    .view-tab.active .count-pill{background:var(--accent);color:#0a0a0a;border-color:var(--accent)}
+
+    /* ── History view ── */
+    .history-view{display:none;flex-direction:column;height:calc(100vh - 57px - 42px);overflow:hidden}
+    .history-view.active{display:flex}
+    .history-toolbar{display:flex;align-items:center;gap:10px;padding:14px 28px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+    .filter-group{display:flex;align-items:center;gap:6px}
+    .filter-label{font-family:'Space Mono',monospace;font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+    .filter-select{background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-family:'Space Mono',monospace;font-size:.62rem;outline:none;cursor:pointer}
+    .filter-select:focus{border-color:var(--accent)}
+    .history-spacer{flex:1}
+    .history-count{font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted)}
+
+    .history-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:20px 28px;overflow-y:auto;align-content:start}
+    .history-grid::-webkit-scrollbar{width:6px}
+    .history-grid::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+
+    .dmg-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:all .18s;animation:slideIn .25s ease}
+    .dmg-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+    .dmg-thumb{position:relative;width:100%;aspect-ratio:16/9;background:#000;overflow:hidden}
+    .dmg-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .dmg-thumb-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--border2)}
+    .dmg-source{position:absolute;top:8px;right:8px;padding:2px 8px;border-radius:999px;font-family:'Space Mono',monospace;font-size:.52rem;font-weight:700;letter-spacing:.05em;backdrop-filter:blur(6px)}
+    .dmg-source.auto{background:rgba(77,166,255,.2);color:var(--info);border:1px solid rgba(77,166,255,.4)}
+    .dmg-source.manual{background:rgba(200,241,53,.2);color:var(--accent);border:1px solid rgba(200,241,53,.4)}
+    .dmg-body{padding:10px 12px}
+    .dmg-class{font-size:.78rem;font-weight:700;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .dmg-meta{display:flex;align-items:center;justify-content:space-between;gap:6px}
+    .dmg-stat{font-family:'Space Mono',monospace;font-size:.58rem;color:var(--muted)}
+    .dmg-stat strong{color:var(--accent);font-weight:700}
+    .dmg-time{font-family:'Space Mono',monospace;font-size:.52rem;color:var(--muted);margin-top:6px}
+
+    .history-empty{grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted);font-family:'Space Mono',monospace;font-size:.7rem;line-height:2}
+
+    /* ── Detail modal ── */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(4px);z-index:1000;display:none;align-items:center;justify-content:center;padding:24px;animation:fadeIn .2s ease}
+    .modal-backdrop.visible{display:flex}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    .modal{background:var(--surface);border:1px solid var(--border2);border-radius:14px;max-width:820px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;animation:slideUp .25s ease}
+    @keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+    .modal-title{font-size:1rem;font-weight:800;display:flex;align-items:center;gap:10px}
+    .modal-close{background:transparent;border:1px solid var(--border2);color:var(--muted2);width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;transition:all .2s}
+    .modal-close:hover{border-color:var(--danger);color:var(--danger)}
+    .modal-body{display:grid;grid-template-columns:1fr 280px;gap:0;overflow:hidden;flex:1;min-height:0}
+    .modal-image{background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .modal-image img{width:100%;height:100%;object-fit:contain;max-height:62vh}
+    .modal-side{padding:18px;overflow-y:auto;border-left:1px solid var(--border)}
+    .modal-side::-webkit-scrollbar{width:4px}
+    .modal-side::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+    .modal-section-title{font-size:.58rem;font-family:'Space Mono',monospace;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin:0 0 10px}
+    .modal-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+    .modal-row:last-of-type{border-bottom:none}
+    .modal-key{font-size:.66rem;color:var(--muted)}
+    .modal-val{font-family:'Space Mono',monospace;font-size:.7rem;font-weight:700}
+    .modal-val.accent{color:var(--accent)}
+    .modal-det-block{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:10px}
+    .modal-det-block-title{font-size:.6rem;font-family:'Space Mono',monospace;color:var(--muted2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}
+    .modal-actions{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
   </style>
 </head>
 <body>
@@ -201,6 +267,19 @@
   <div class="header-time" id="clock">--:--:--</div>
 </header>
 
+<!-- ── VIEW TABS ── -->
+<div class="view-tabs">
+  <div class="view-tab active" id="tabLive" onclick="switchView('live')">
+    <span>◉ Live Detection</span>
+  </div>
+  <div class="view-tab" id="tabHistory" onclick="switchView('history')">
+    <span>▤ Damage History</span>
+    <span class="count-pill" id="historyCount">0</span>
+  </div>
+</div>
+
+<!-- ════════ LIVE VIEW ════════ -->
+<div class="live-view" id="liveView">
 <div class="layout">
 
   <!-- ── VIDEO PANEL ── -->
@@ -345,6 +424,86 @@
 
   </div>
 </div>
+</div><!-- /live-view -->
+
+<!-- ════════ HISTORY VIEW ════════ -->
+<div class="history-view" id="historyView">
+  <div class="history-toolbar">
+    <div class="filter-group">
+      <span class="filter-label">Type</span>
+      <select class="filter-select" id="filterType" onchange="renderHistory()">
+        <option value="all">All types</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Severity</span>
+      <select class="filter-select" id="filterSev" onchange="renderHistory()">
+        <option value="all">All</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Source</span>
+      <select class="filter-select" id="filterSource" onchange="renderHistory()">
+        <option value="all">All</option>
+        <option value="auto">Auto</option>
+        <option value="manual">Manual</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Sort</span>
+      <select class="filter-select" id="sortBy" onchange="renderHistory()">
+        <option value="time_desc">Newest first</option>
+        <option value="time_asc">Oldest first</option>
+        <option value="cost_desc">Cost (high→low)</option>
+        <option value="area_desc">Area (large→small)</option>
+        <option value="sev_desc">Severity (high→low)</option>
+      </select>
+    </div>
+    <div class="history-spacer"></div>
+    <button class="btn btn-ghost" onclick="loadHistory()">↻ Refresh</button>
+    <span class="history-count" id="historyShownCount">0 shown</span>
+  </div>
+  <div class="history-grid" id="historyGrid">
+    <div class="history-empty">No damage captured yet.<br/>Detections will appear here automatically (AUTO) or when you capture (MANUAL).</div>
+  </div>
+</div>
+
+<!-- ════════ DETAIL MODAL ════════ -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">
+        <span id="modalSevDot" style="width:10px;height:10px;border-radius:50%;background:var(--muted)"></span>
+        <span id="modalClass">Damage Detail</span>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-image">
+        <img id="modalImg" src="" alt="Captured damage"/>
+      </div>
+      <div class="modal-side">
+        <div class="modal-section-title">▸ Summary</div>
+        <div class="modal-row"><span class="modal-key">Damage Type</span><span class="modal-val" id="mdType">—</span></div>
+        <div class="modal-row"><span class="modal-key">Severity</span><span class="modal-val" id="mdSev">—</span></div>
+        <div class="modal-row"><span class="modal-key">Source</span><span class="modal-val" id="mdSource">—</span></div>
+        <div class="modal-row"><span class="modal-key">Confidence</span><span class="modal-val accent" id="mdConf">—</span></div>
+        <div class="modal-row"><span class="modal-key">Damaged Area</span><span class="modal-val" id="mdArea">—</span></div>
+        <div class="modal-row"><span class="modal-key">Est. Cost</span><span class="modal-val accent" id="mdCost">—</span></div>
+        <div class="modal-row"><span class="modal-key">Captured</span><span class="modal-val" id="mdTime">—</span></div>
+
+        <div id="mdDetections"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="mdDeleteBtn" onclick="deleteEvent()">🗑 Delete (false positive)</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ── Clock & uptime ─────────────────────────────────────────
@@ -470,6 +629,7 @@ async function captureDetect(){
       confidences.push(seg.confidence);
     }
     pollStats();
+    loadHistory();  // refresh damage history with the new capture
   }catch(e){
     document.getElementById('capturedBadgeText').textContent = 'CAPTURE FAILED';
     console.warn(e);
@@ -543,6 +703,7 @@ function clearSession(){
       confidences=[];
       document.getElementById('logList').innerHTML='<div class="no-data">Session cleared. Waiting...</div>';
       updateSummary({total_detections:0,total_cost_thb:0,total_area_m2:0,severity_counts:{high:0}});
+      historyEvents=[]; renderHistory(); updateHistoryCount();
     }).catch(()=>{});
 }
 
@@ -564,6 +725,15 @@ async function pollStats(){
     updateSummary(d);
     if(d.avg_confidence>0){
       document.getElementById('statAvgConf').textContent=(d.avg_confidence*100).toFixed(0)+'%';
+    }
+  } catch(e){}
+
+  // Keep the history badge count fresh (lightweight, no thumbnails)
+  try{
+    const re = await fetch(deviceUrl+'/events',{signal:AbortSignal.timeout(2000)});
+    if(re.ok){
+      const de = await re.json();
+      document.getElementById('historyCount').textContent = de.count||0;
     }
   } catch(e){}
 }
@@ -702,6 +872,197 @@ function startDemo(){
 function stopDemo(){
   if(demoTimer){clearInterval(demoTimer);demoTimer=null;}
 }
+
+// ── View switching (Live / History) ───────────────────────
+let currentView = 'live';
+function switchView(v){
+  currentView = v;
+  document.getElementById('tabLive').classList.toggle('active', v==='live');
+  document.getElementById('tabHistory').classList.toggle('active', v==='history');
+  document.getElementById('liveView').style.display    = v==='live' ? '' : 'none';
+  document.getElementById('historyView').classList.toggle('active', v==='history');
+  if(v==='history') loadHistory();
+}
+
+// ── Damage history state ───────────────────────────────────
+let historyEvents = [];     // cached list from /events (with thumbnails)
+let historyTimer  = null;
+let knownTypes    = new Set();
+let activeEventId = null;
+
+function updateHistoryCount(){
+  document.getElementById('historyCount').textContent = historyEvents.length;
+}
+
+async function loadHistory(){
+  // Demo mode: synthesize events from demo log
+  if(!isConnected){
+    historyEvents = DEMO_HISTORY.slice();
+    refreshTypeFilter(); renderHistory(); updateHistoryCount();
+    return;
+  }
+  try{
+    const r = await fetch(deviceUrl+'/events?include_thumb=1',{signal:AbortSignal.timeout(4000)});
+    if(!r.ok) throw new Error();
+    const data = await r.json();
+    historyEvents = data.events||[];
+    refreshTypeFilter(); renderHistory(); updateHistoryCount();
+  }catch(e){ /* keep cache */ }
+}
+
+function refreshTypeFilter(){
+  const sel = document.getElementById('filterType');
+  historyEvents.forEach(e=>knownTypes.add(e.class));
+  const cur = sel.value;
+  sel.innerHTML = '<option value="all">All types</option>' +
+    [...knownTypes].sort().map(t=>`<option value="${t}">${t}</option>`).join('');
+  sel.value = [...knownTypes].includes(cur)||cur==='all' ? cur : 'all';
+}
+
+const SEV_RANK = {low:1, medium:2, high:3};
+
+function renderHistory(){
+  const grid = document.getElementById('historyGrid');
+  const fType = document.getElementById('filterType').value;
+  const fSev  = document.getElementById('filterSev').value;
+  const fSrc  = document.getElementById('filterSource').value;
+  const sort  = document.getElementById('sortBy').value;
+
+  let items = historyEvents.filter(e=>
+    (fType==='all'||e.class===fType) &&
+    (fSev==='all'||e.severity===fSev) &&
+    (fSrc==='all'||e.source===fSrc)
+  );
+
+  items.sort((a,b)=>{
+    switch(sort){
+      case 'time_asc':  return a.timestamp-b.timestamp;
+      case 'cost_desc': return (b.cost_thb||0)-(a.cost_thb||0);
+      case 'area_desc': return (b.area_m2||0)-(a.area_m2||0);
+      case 'sev_desc':  return (SEV_RANK[b.severity]||0)-(SEV_RANK[a.severity]||0);
+      default:          return b.timestamp-a.timestamp; // time_desc
+    }
+  });
+
+  document.getElementById('historyShownCount').textContent = items.length+' shown';
+
+  if(items.length===0){
+    grid.innerHTML = '<div class="history-empty">No damage matches these filters.</div>';
+    return;
+  }
+
+  grid.innerHTML = items.map(e=>{
+    const t = new Date(e.timestamp*1000).toLocaleTimeString();
+    const area = (e.area_m2!=null? e.area_m2.toFixed(3):'—')+' m²';
+    const cost = e.cost_thb!=null ? '฿'+e.cost_thb.toLocaleString() : '—';
+    const thumb = e.thumbnail
+      ? `<img src="${e.thumbnail}" alt="${e.class}"/>`
+      : `<div class="dmg-thumb-empty">▤</div>`;
+    return `
+      <div class="dmg-card" onclick="openEvent(${e.id})">
+        <div class="dmg-thumb">
+          ${thumb}
+          <span class="dmg-source ${e.source}">${e.source.toUpperCase()}</span>
+        </div>
+        <div class="dmg-body">
+          <div class="dmg-class">${e.class}</div>
+          <div class="dmg-meta">
+            <span class="dmg-stat"><strong>${cost}</strong></span>
+            ${sevBadge(e.severity)}
+          </div>
+          <div class="dmg-meta" style="margin-top:5px">
+            <span class="dmg-stat">${area}</span>
+            <span class="dmg-stat">${(e.confidence*100||0).toFixed(0)}%</span>
+          </div>
+          <div class="dmg-time">${t}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Detail modal ───────────────────────────────────────────
+async function openEvent(id){
+  activeEventId = id;
+
+  // Demo mode: use cached event
+  let ev = historyEvents.find(e=>e.id===id);
+  if(isConnected){
+    try{
+      const r = await fetch(deviceUrl+'/event/'+id,{signal:AbortSignal.timeout(4000)});
+      if(r.ok) ev = await r.json();
+    }catch(e){}
+  }
+  if(!ev) return;
+
+  document.getElementById('modalClass').textContent = ev.class;
+  document.getElementById('mdType').textContent     = ev.class;
+  document.getElementById('mdSev').innerHTML         = sevBadge(ev.severity);
+  document.getElementById('mdSource').textContent   = (ev.source||'').toUpperCase();
+  document.getElementById('mdConf').textContent     = ((ev.confidence||0)*100).toFixed(1)+'%';
+  document.getElementById('mdArea').textContent     = (ev.area_m2!=null?ev.area_m2.toFixed(4):'—')+' m²';
+  document.getElementById('mdCost').textContent     = ev.cost_thb!=null?'฿'+ev.cost_thb.toLocaleString():'—';
+  document.getElementById('mdTime').textContent     = new Date(ev.timestamp*1000).toLocaleString();
+  document.getElementById('modalImg').src           = ev.thumbnail||'';
+
+  const sevColor = {low:'var(--info)',medium:'var(--warn)',high:'var(--danger)'}[ev.severity]||'var(--muted)';
+  document.getElementById('modalSevDot').style.background = sevColor;
+
+  // Per-detection breakdown
+  const dets = ev.detections||[];
+  document.getElementById('mdDetections').innerHTML =
+    '<div class="modal-section-title" style="margin-top:16px">▸ Detections ('+dets.length+')</div>' +
+    dets.map(d=>{
+      const rows = [];
+      if(d.bbox_width_cm!=null)  rows.push(['BBox W', d.bbox_width_cm+' cm']);
+      if(d.bbox_height_cm!=null) rows.push(['BBox H', d.bbox_height_cm+' cm']);
+      if(d.bbox_area_cm2!=null)  rows.push(['BBox Area', d.bbox_area_cm2+' cm²']);
+      if(d.seg_width_cm!=null)   rows.push(['Seg W', d.seg_width_cm+' cm']);
+      if(d.seg_height_cm!=null)  rows.push(['Seg H', d.seg_height_cm+' cm']);
+      if(d.seg_area_cm2!=null)   rows.push(['Seg Area', d.seg_area_cm2+' cm²']);
+      return `<div class="modal-det-block">
+        <div class="modal-det-block-title">${d.class} · ${(d.confidence*100).toFixed(0)}% · ${d.type}</div>
+        ${rows.map(r=>`<div class="modal-row"><span class="modal-key">${r[0]}</span><span class="modal-val">${r[1]}</span></div>`).join('')}
+      </div>`;
+    }).join('');
+
+  document.getElementById('mdDeleteBtn').style.display = isConnected ? '' : 'none';
+  document.getElementById('modalBackdrop').classList.add('visible');
+}
+
+function closeModal(){
+  document.getElementById('modalBackdrop').classList.remove('visible');
+  activeEventId = null;
+}
+
+async function deleteEvent(){
+  if(activeEventId==null || !isConnected) return;
+  try{
+    await fetch(deviceUrl+'/event/'+activeEventId+'/delete',{method:'POST',signal:AbortSignal.timeout(3000)});
+    historyEvents = historyEvents.filter(e=>e.id!==activeEventId);
+    renderHistory(); updateHistoryCount();
+    closeModal();
+  }catch(e){}
+}
+
+// Close modal on Escape
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+
+// Poll history periodically while on the history tab (live device only)
+setInterval(()=>{
+  if(currentView==='history' && isConnected) loadHistory();
+}, 4000);
+
+// ── Demo history (shown when no device connected) ──────────
+const DEMO_HISTORY = [
+  {id:1, class:'Pothole', source:'manual', timestamp:Date.now()/1000-30, confidence:.91, severity:'high', cost_thb:2380, area_m2:0.0628,
+   thumbnail:'', detections:[{class:'Pothole',confidence:.91,type:'bbox',bbox_width_cm:28.4,bbox_height_cm:22.1,bbox_area_cm2:627.6}]},
+  {id:2, class:'Longitudinal Crack', source:'auto', timestamp:Date.now()/1000-80, confidence:.79, severity:'medium', cost_thb:420, area_m2:0.0102,
+   thumbnail:'', detections:[{class:'Longitudinal Crack',confidence:.79,type:'bbox',bbox_width_cm:12.1,bbox_height_cm:8.4,bbox_area_cm2:101.6}]},
+  {id:3, class:'Surface Damage', source:'auto', timestamp:Date.now()/1000-140, confidence:.73, severity:'low', cost_thb:180, area_m2:0.0042,
+   thumbnail:'', detections:[{class:'Surface Damage',confidence:.73,type:'bbox',bbox_width_cm:7.2,bbox_height_cm:5.8,bbox_area_cm2:41.7}]},
+  {id:4, class:'Alligator Crack', source:'manual', timestamp:Date.now()/1000-200, confidence:.84, severity:'high', cost_thb:1560, area_m2:0.0488,
+   thumbnail:'', detections:[{class:'Alligator Crack',confidence:.84,type:'seg',seg_width_cm:24.0,seg_height_cm:20.3,seg_area_cm2:487.6}]},
+];
 
 // ── Init ───────────────────────────────────────────────────
 window.addEventListener('load',()=>setTimeout(reconnect,200));

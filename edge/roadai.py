@@ -48,11 +48,16 @@ latest_frame       = None
 latest_annotations = None
 output_frame       = None
 latest_detections  = []
-detection_history  = deque(maxlen=500)   # rolling history for session log
+detection_history  = deque(maxlen=500)   # rolling history for session log (flat detections)
+damage_events      = deque(maxlen=300)   # grouped events w/ thumbnail for the history viewer
+event_counter      = 0                   # monotonic id source for events
 session_start      = time.time()
 lock               = threading.Lock()
 running            = True
 detection_mode     = "auto"              # "auto" = continuous | "manual" = capture on demand
+
+THUMB_WIDTH  = 360                       # stored thumbnail size for history viewer
+THUMB_HEIGHT = 203
 
 app = Flask(__name__)
 CORS(app)
@@ -63,6 +68,49 @@ def encode_frame(frame):
     small = cv2.resize(frame, (INFERENCE_WIDTH, INFERENCE_HEIGHT))
     _, buffer = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 60])
     return base64.b64encode(buffer).decode("utf-8")
+
+
+def make_thumbnail(frame, outputs):
+    """Annotated low-res thumbnail (base64 data-URI) stored with each damage event."""
+    annotated = draw_annotations(frame.copy(), outputs)
+    thumb = cv2.resize(annotated, (THUMB_WIDTH, THUMB_HEIGHT))
+    _, buffer = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 55])
+    return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
+
+
+def build_event(frame, outputs, detections, source):
+    """Group a frame's detections into a single event with a thumbnail + id.
+    Must be called while holding `lock` is NOT required (it locks internally)."""
+    global event_counter
+    if not detections:
+        return None
+
+    # Choose a representative detection (prefer the one with a real class over 'Segmentation')
+    primary = next((d for d in detections if d.get("class") != "Segmentation"), detections[0])
+
+    # Aggregate cost/area across the detections in this event
+    total_cost = sum(d.get("cost_thb", 0) for d in detections)
+    area_m2    = max((d.get("seg_area_m2") or d.get("area_m2") or 0) for d in detections)
+    sev_rank   = {"low": 1, "medium": 2, "high": 3}
+    worst_sev  = max((d.get("severity", "low") for d in detections), key=lambda s: sev_rank.get(s, 0))
+
+    with lock:
+        event_counter += 1
+        eid = event_counter
+
+    event = {
+        "id":         eid,
+        "class":      primary.get("class", "Unknown"),
+        "source":     source,
+        "timestamp":  time.time(),
+        "confidence": primary.get("confidence", 0),
+        "severity":   worst_sev,
+        "cost_thb":   total_cost,
+        "area_m2":    round(area_m2, 4),
+        "thumbnail":  make_thumbnail(frame, outputs),
+        "detections": detections,
+    }
+    return event
 
 
 def get_cost_per_m2(class_name):
@@ -217,11 +265,15 @@ def inference_worker():
             if outputs is None:
                 continue
 
+            event = build_event(frame, outputs, detections, "auto") if detections else None
+
             with lock:
                 latest_annotations = outputs
                 latest_detections  = detections
                 if detections:
                     detection_history.extend(detections)
+                if event:
+                    damage_events.append(event)
 
             if detections and CLOUD_URL:
                 threading.Thread(target=upload_to_cloud, args=(detections,), daemon=True).start()
@@ -359,6 +411,7 @@ def clear_session():
     global session_start
     with lock:
         detection_history.clear()
+        damage_events.clear()
         session_start = time.time()
     return jsonify({"cleared": True})
 
@@ -383,6 +436,57 @@ def mode():
     return jsonify({"mode": detection_mode})
 
 
+@app.route("/events")
+def events_list():
+    """Damage history for the viewer — lightweight list WITHOUT thumbnails by default.
+    Pass ?include_thumb=1 to embed thumbnails (heavier)."""
+    include_thumb = request.args.get("include_thumb") == "1"
+    with lock:
+        evs = list(damage_events)
+
+    items = []
+    for e in evs:
+        item = {
+            "id":         e["id"],
+            "class":      e["class"],
+            "source":     e["source"],
+            "timestamp":  e["timestamp"],
+            "confidence": e["confidence"],
+            "severity":   e["severity"],
+            "cost_thb":   e["cost_thb"],
+            "area_m2":    e["area_m2"],
+            "num_detections": len(e["detections"]),
+        }
+        if include_thumb:
+            item["thumbnail"] = e["thumbnail"]
+        items.append(item)
+
+    items.reverse()  # newest first
+    return jsonify({"events": items, "count": len(items)})
+
+
+@app.route("/event/<int:event_id>")
+def event_detail(event_id):
+    """Full detail for a single damage event, including thumbnail + all detections."""
+    with lock:
+        ev = next((e for e in damage_events if e["id"] == event_id), None)
+    if ev is None:
+        return jsonify({"error": "event not found"}), 404
+    return jsonify(ev)
+
+
+@app.route("/event/<int:event_id>/delete", methods=["POST"])
+def event_delete(event_id):
+    """Remove an event (e.g. operator flags it as a false positive)."""
+    with lock:
+        before = len(damage_events)
+        kept = [e for e in damage_events if e["id"] != event_id]
+        damage_events.clear()
+        damage_events.extend(kept)
+        removed = before - len(damage_events)
+    return jsonify({"deleted": removed > 0, "id": event_id})
+
+
 @app.route("/capture", methods=["POST"])
 def capture():
     """MANUAL mode: freeze the current frame, run detection on it once,
@@ -403,11 +507,14 @@ def capture():
         return jsonify({"error": "inference server returned an error"}), 502
 
     # Store in history (auto-add to database as requested)
+    event = build_event(frame, outputs, detections, "manual") if detections else None
     with lock:
         latest_annotations = outputs
         latest_detections  = detections
         if detections:
             detection_history.extend(detections)
+        if event:
+            damage_events.append(event)
 
     if detections and CLOUD_URL:
         threading.Thread(target=upload_to_cloud, args=(detections,), daemon=True).start()
@@ -421,6 +528,7 @@ def capture():
         "captured":   True,
         "detections": detections,
         "count":      len(detections),
+        "event_id":   event["id"] if event else None,
         "frame":      f"data:image/jpeg;base64,{frame_b64}",
     })
 
@@ -449,6 +557,8 @@ if __name__ == "__main__":
     print("  /clear       — reset session (POST)")
     print("  /mode        — get/set AUTO|MANUAL mode (GET/POST)")
     print("  /capture     — manual capture & detect (POST)")
+    print("  /events      — damage history list (GET)")
+    print("  /event/<id>  — full event detail (GET)")
     print("=" * 50)
 
     app.run(host="0.0.0.0", port=5000, threaded=True)
