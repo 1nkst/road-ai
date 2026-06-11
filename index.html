@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RoadAI — Live Detection</title>
+  <title>RoadAI — Survey Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -231,6 +233,92 @@
     .modal-det-block{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:10px}
     .modal-det-block-title{font-size:.6rem;font-family:'Space Mono',monospace;color:var(--muted2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}
     .modal-actions{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+
+    /* ── Map view ── */
+    .map-view{display:none;flex-direction:column;height:calc(100vh - 57px - 42px)}
+    .map-view.active{display:flex}
+    .survey-bar{display:flex;align-items:center;gap:14px;padding:12px 28px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--surface)}
+    .survey-status{display:flex;align-items:center;gap:9px;font-family:'Space Mono',monospace;font-size:.68rem}
+    .survey-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex-shrink:0}
+    .survey-dot.live{background:var(--accent);box-shadow:0 0 0 0 rgba(200,241,53,.6);animation:surveyPulse 1.6s infinite}
+    @keyframes surveyPulse{0%{box-shadow:0 0 0 0 rgba(200,241,53,.5)}70%{box-shadow:0 0 0 7px rgba(200,241,53,0)}100%{box-shadow:0 0 0 0 rgba(200,241,53,0)}}
+    .survey-meta{color:var(--muted2);font-size:.62rem}
+    .survey-meta strong{color:var(--text)}
+    .survey-spacer{flex:1}
+
+    #map{flex:1;width:100%;min-height:500px;height:calc(100vh - 57px - 42px - 52px);background:#0d0d0d;z-index:1}
+    .map-empty-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:400;background:rgba(10,10,10,.82);border:1px solid var(--border2);border-radius:10px;padding:18px 22px;font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted2);text-align:center;line-height:1.9;pointer-events:none;backdrop-filter:blur(4px)}
+    .map-legend{position:absolute;bottom:22px;right:14px;z-index:450;background:rgba(10,10,10,.85);border:1px solid var(--border2);border-radius:10px;padding:11px 14px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);backdrop-filter:blur(4px)}
+    .map-legend-title{font-size:.54rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.09em;margin-bottom:7px}
+    .map-legend-row{display:flex;align-items:center;gap:8px;margin:3px 0}
+    .lg-dot{width:10px;height:10px;border-radius:50%;border:1.5px solid #0a0a0a;flex-shrink:0}
+    .lg-line{width:16px;height:3px;border-radius:2px;background:linear-gradient(90deg,#00e5ff,#ff2d9b);flex-shrink:0}
+
+    /* Leaflet dark theming */
+    .leaflet-container{background:#0d0d0d;font-family:'Space Mono',monospace}
+    .leaflet-tile{filter:none}
+    .leaflet-control-zoom a{background:var(--surface)!important;color:var(--accent)!important;border-color:var(--border2)!important}
+    .leaflet-control-attribution{background:rgba(10,10,10,.7)!important;color:var(--muted)!important}
+    .leaflet-control-attribution a{color:var(--muted2)!important}
+    .leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);border:1px solid var(--border2);border-radius:10px}
+    .leaflet-popup-tip{background:var(--surface);border:1px solid var(--border2)}
+    .leaflet-popup-content{margin:12px 14px;font-family:'Syne',sans-serif}
+
+    .pin-pop-title{font-weight:800;font-size:.85rem;margin-bottom:4px}
+    .pin-pop-row{font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted2);margin:2px 0}
+    .pin-pop-row strong{color:var(--accent)}
+    .pin-pop-btn{margin-top:8px;width:100%;background:var(--accent);color:#0a0a0a;border:none;border-radius:6px;padding:6px;font-family:'Syne',sans-serif;font-weight:700;font-size:.7rem;cursor:pointer}
+
+    /* Custom marker badge */
+    .map-pin{background:var(--accent);color:#0a0a0a;border-radius:50% 50% 50% 0;width:30px;height:30px;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;border:2px solid #0a0a0a;box-shadow:0 2px 8px rgba(0,0,0,.5);font-weight:800;font-size:.7rem}
+    .map-pin span{transform:rotate(45deg);font-family:'Space Mono',monospace}
+    .map-pin.sev-high{background:var(--danger)}
+    .map-pin.sev-med{background:var(--warn)}
+    .map-pin.here{background:var(--info);border-radius:50%;transform:none;width:18px;height:18px;box-shadow:0 0 0 6px rgba(77,166,255,.25)}
+
+    /* ── Session detail & gallery (overlay panels) ── */
+    .panel-view{display:none;flex-direction:column;height:calc(100vh - 57px - 42px);overflow:hidden}
+    .panel-view.active{display:flex}
+    .breadcrumb{display:flex;align-items:center;gap:8px;padding:13px 28px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted2);flex-wrap:wrap}
+    .breadcrumb .crumb{cursor:pointer;color:var(--muted2);transition:color .2s}
+    .breadcrumb .crumb:hover{color:var(--accent)}
+    .breadcrumb .crumb.here{color:var(--text);cursor:default}
+    .breadcrumb .sep{color:var(--border2)}
+
+    .panel-scroll{overflow-y:auto;padding:24px 28px}
+    .panel-scroll::-webkit-scrollbar{width:6px}
+    .panel-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+
+    .sess-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+    .sess-title{font-size:1.5rem;font-weight:800;line-height:1.2;margin-bottom:8px}
+    .sess-submeta{display:flex;gap:18px;flex-wrap:wrap;font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted2)}
+    .sess-submeta strong{color:var(--accent)}
+    .sess-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:26px}
+    .kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+    .kpi-num{font-size:1.5rem;font-weight:800;color:var(--accent)}
+    .kpi-num.neutral{color:var(--text)}
+    .kpi-label{font-family:'Space Mono',monospace;font-size:.56rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+
+    .type-list-title{font-family:'Space Mono',monospace;font-size:.62rem;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px}
+    .type-row{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:10px;cursor:pointer;transition:all .18s}
+    .type-row:hover{border-color:var(--accent);transform:translateX(3px)}
+    .type-bar-wrap{flex:1;display:flex;flex-direction:column;gap:6px}
+    .type-bar-top{display:flex;align-items:center;justify-content:space-between}
+    .type-name{font-weight:700;font-size:.9rem}
+    .type-count{font-family:'Space Mono',monospace;font-size:.72rem;color:var(--muted2)}
+    .type-count strong{color:var(--accent);font-size:.95rem}
+    .type-bar{height:5px;background:var(--surface2);border-radius:99px;overflow:hidden}
+    .type-bar-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .5s ease}
+    .type-arrow{color:var(--muted);font-size:1.1rem}
+
+    .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+    .gal-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:all .18s}
+    .gal-card:hover{border-color:var(--accent);transform:translateY(-3px)}
+    .gal-thumb{width:100%;aspect-ratio:16/9;background:#000;object-fit:cover;display:block}
+    .gal-body{padding:13px 15px}
+    .gal-row{display:flex;justify-content:space-between;align-items:center;font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted2);margin:4px 0}
+    .gal-row strong{color:var(--accent);font-weight:700}
+    .gal-card-title{font-weight:700;font-size:.84rem;margin-bottom:9px;display:flex;align-items:center;justify-content:space-between;gap:6px}
   </style>
 </head>
 <body>
@@ -269,7 +357,11 @@
 
 <!-- ── VIEW TABS ── -->
 <div class="view-tabs">
-  <div class="view-tab active" id="tabLive" onclick="switchView('live')">
+  <div class="view-tab active" id="tabMap" onclick="switchView('map')">
+    <span>🗺 Survey Map</span>
+    <span class="count-pill" id="sessionCount">0</span>
+  </div>
+  <div class="view-tab" id="tabLive" onclick="switchView('live')">
     <span>◉ Live Detection</span>
   </div>
   <div class="view-tab" id="tabHistory" onclick="switchView('history')">
@@ -278,8 +370,55 @@
   </div>
 </div>
 
+<!-- ════════ MAP VIEW ════════ -->
+<div class="map-view active" id="mapView">
+  <div class="survey-bar">
+    <div class="survey-status">
+      <span class="survey-dot" id="surveyDot"></span>
+      <span id="surveyStatusText">No active survey</span>
+    </div>
+    <span class="survey-meta" id="surveyMeta"></span>
+    <div class="survey-spacer"></div>
+    <button class="btn btn-primary" id="btnStartSurvey" onclick="openStartSurvey()">▶ Start Survey</button>
+    <button class="btn btn-danger" id="btnEndSurvey" onclick="openEndSurvey()" style="display:none">■ End Survey</button>
+  </div>
+  <div style="position:relative;flex:1">
+    <div id="map"></div>
+    <div class="map-empty-hint" id="mapEmptyHint">No surveys yet.<br/>Start a survey to drop your first pin.</div>
+    <div class="map-legend">
+      <div class="map-legend-title">Damage severity</div>
+      <div class="map-legend-row"><span class="lg-dot" style="background:#ff3b3b"></span>High</div>
+      <div class="map-legend-row"><span class="lg-dot" style="background:#ffa726"></span>Medium</div>
+      <div class="map-legend-row"><span class="lg-dot" style="background:#ffe14d"></span>Low</div>
+      <div class="map-legend-row" style="margin-top:6px"><span class="lg-line"></span>Survey path</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ SESSION DETAIL VIEW ════════ -->
+<div class="panel-view" id="sessionView">
+  <div class="breadcrumb">
+    <span class="crumb" onclick="switchView('map')">Survey Map</span>
+    <span class="sep">›</span>
+    <span class="crumb here" id="crumbSession">Session</span>
+  </div>
+  <div class="panel-scroll" id="sessionScroll"></div>
+</div>
+
+<!-- ════════ GALLERY VIEW ════════ -->
+<div class="panel-view" id="galleryView">
+  <div class="breadcrumb">
+    <span class="crumb" onclick="switchView('map')">Survey Map</span>
+    <span class="sep">›</span>
+    <span class="crumb" id="crumbBackSession" onclick="reopenSession()">Session</span>
+    <span class="sep">›</span>
+    <span class="crumb here" id="crumbType">Damage type</span>
+  </div>
+  <div class="panel-scroll"><div class="gallery-grid" id="galleryGrid"></div></div>
+</div>
+
 <!-- ════════ LIVE VIEW ════════ -->
-<div class="live-view" id="liveView">
+<div class="live-view" id="liveView" style="display:none">
 <div class="layout">
 
   <!-- ── VIDEO PANEL ── -->
@@ -505,6 +644,64 @@
   </div>
 </div>
 
+<!-- ════════ START SURVEY MODAL ════════ -->
+<div class="modal-backdrop" id="startModal" onclick="if(event.target===this)closeStartSurvey()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title"><span>▶</span><span>Start a Survey</span></div>
+      <button class="modal-close" onclick="closeStartSurvey()">✕</button>
+    </div>
+    <div style="padding:20px">
+      <div class="modal-section-title">▸ Starting location</div>
+      <p style="font-size:.72rem;color:var(--muted2);margin-bottom:12px;line-height:1.6">Pick a preset road, or click anywhere on the map to drop your start point. GPS will set this automatically once the hardware is connected.</p>
+      <select class="filter-select" id="startLocSelect" style="width:100%;padding:9px 12px;font-size:.72rem" onchange="onStartLocPreset()">
+        <option value="">— Select a road —</option>
+      </select>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <div style="flex:1">
+          <div class="modal-key" style="margin-bottom:4px">Latitude</div>
+          <input class="device-input" id="startLat" style="width:100%" placeholder="18.7965"/>
+        </div>
+        <div style="flex:1">
+          <div class="modal-key" style="margin-bottom:4px">Longitude</div>
+          <input class="device-input" id="startLng" style="width:100%" placeholder="98.9670"/>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <div class="modal-key" style="margin-bottom:4px">Survey name / road</div>
+        <input class="device-input" id="startName" style="width:100%" placeholder="ถนนห้วยแก้ว (Huay Kaew Rd)"/>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeStartSurvey()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmStartSurvey()">Start Survey</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ END SURVEY MODAL ════════ -->
+<div class="modal-backdrop" id="endModal" onclick="if(event.target===this)closeEndSurvey()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title"><span>■</span><span>End Survey</span></div>
+      <button class="modal-close" onclick="closeEndSurvey()">✕</button>
+    </div>
+    <div style="padding:20px">
+      <div id="endSummary" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:13px 15px;margin-bottom:16px;font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted2);line-height:1.9"></div>
+      <div class="modal-section-title">▸ Distance surveyed</div>
+      <p style="font-size:.72rem;color:var(--muted2);margin-bottom:10px;line-height:1.6">Enter the distance covered. With GPS this fills automatically from the track.</p>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input class="device-input" id="endDistance" style="flex:1" placeholder="0.5"/>
+        <span style="font-family:'Space Mono',monospace;font-size:.72rem;color:var(--muted2)">km</span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeEndSurvey()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmEndSurvey()">End &amp; Save Survey</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Clock & uptime ─────────────────────────────────────────
 function updateClock(){ document.getElementById('clock').textContent = new Date().toLocaleTimeString() }
@@ -589,7 +786,7 @@ async function captureDetect(){
   try{
     const r = await fetch(deviceUrl+'/capture',{
       method:'POST',
-      signal:AbortSignal.timeout(15000)
+      signal:AbortSignal.timeout(10000)
     });
     if(!r.ok) throw new Error('capture failed');
     const data = await r.json();
@@ -874,15 +1071,470 @@ function stopDemo(){
 }
 
 // ── View switching (Live / History) ───────────────────────
-let currentView = 'live';
+let currentView = 'map';
 function switchView(v){
   currentView = v;
+
+  // Tab highlighting — detail/gallery keep the Map tab lit
+  document.getElementById('tabMap').classList.toggle('active',  v==='map'||v==='session'||v==='gallery');
   document.getElementById('tabLive').classList.toggle('active', v==='live');
   document.getElementById('tabHistory').classList.toggle('active', v==='history');
-  document.getElementById('liveView').style.display    = v==='live' ? '' : 'none';
+
+  // Show/hide each view container
+  document.getElementById('mapView').classList.toggle('active', v==='map');
+  document.getElementById('liveView').style.display = v==='live' ? '' : 'none';
   document.getElementById('historyView').classList.toggle('active', v==='history');
+  document.getElementById('sessionView').classList.toggle('active', v==='session');
+  document.getElementById('galleryView').classList.toggle('active', v==='gallery');
+
   if(v==='history') loadHistory();
+  if(v==='map'){ loadSessions(); setTimeout(()=>{ if(map) map.invalidateSize(); }, 60); }
 }
+
+// ════════════════════════════════════════════════════════════
+//  SURVEY MAP
+// ════════════════════════════════════════════════════════════
+let map = null;
+let sessionData = [];          // cached /sessions
+let sessionMarkers = [];       // leaflet markers
+let hereMarker = null;         // current-location marker
+let startPickMarker = null;    // temp marker while choosing start point
+let activeSessionId = null;    // backend active survey id
+let viewingSessionId = null;   // session currently open in detail view
+
+const CM_CENTER = [18.7965, 98.9670];   // Chiang Mai
+
+function initMap(){
+  if(map || typeof L === 'undefined') return;
+  map = L.map('map', {zoomControl:true, attributionControl:true}).setView(CM_CENTER, 14);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20, subdomains:'abcd', attribution: '© OpenStreetMap © CARTO'
+  }).addTo(map);
+
+  // Click to drop a start point (only meaningful in the start-survey flow)
+  map.on('click', e=>{
+    if(document.getElementById('startModal').classList.contains('visible')){
+      setStartPoint(e.latlng.lat, e.latlng.lng);
+    }
+  });
+
+  // Fix tiles rendering gray/black: recalc size once the container is laid out
+  [80, 300, 800].forEach(ms=>setTimeout(()=>map.invalidateSize(), ms));
+}
+
+// Vibrant palette — one colour per session path (cycles)
+const PATH_COLORS = ['#00e5ff','#ff2d9b','#c8f135','#ff9500','#7c4dff','#00ff88','#ff4dd2','#ffd400'];
+const SEV_COLOR   = {high:'#ff3b3b', medium:'#ffa726', med:'#ffa726', low:'#ffe14d'};
+
+function sessionColor(s, idx){ return PATH_COLORS[ (idx) % PATH_COLORS.length ]; }
+
+function flagIcon(color, kind){
+  // kind: 'start' (▶) or 'end' (■)
+  const glyph = kind==='start' ? '▶' : '■';
+  return L.divIcon({className:'', iconSize:[22,22], iconAnchor:[11,11], popupAnchor:[0,-12],
+    html:`<div style="width:22px;height:22px;border-radius:50%;background:${color};border:2px solid #0a0a0a;
+          display:flex;align-items:center;justify-content:center;color:#0a0a0a;font:700 9px 'Space Mono',monospace;
+          box-shadow:0 2px 8px rgba(0,0,0,.6)">${glyph}</div>`});
+}
+
+async function loadSessions(){
+  if(!isConnected){ sessionData = DEMO_SESSIONS.slice(); renderSessions(); return; }
+  try{
+    const r = await fetch(deviceUrl+'/sessions',{signal:AbortSignal.timeout(4000)});
+    if(r.ok){ sessionData = (await r.json()).sessions||[]; renderSessions(); }
+  }catch(e){}
+  try{
+    const r = await fetch(deviceUrl+'/session/current',{signal:AbortSignal.timeout(3000)});
+    if(r.ok){ const d = await r.json(); updateSurveyBanner(d.active ? d.session : null); }
+  }catch(e){}
+}
+
+function renderSessions(){
+  document.getElementById('sessionCount').textContent = sessionData.length;
+  document.getElementById('mapEmptyHint').style.display = sessionData.length ? 'none' : '';
+  if(!map) return;
+
+  // clear previous layers
+  sessionMarkers.forEach(l=>map.removeLayer(l));
+  sessionMarkers = [];
+  const allLatLngs = [];
+
+  sessionData.forEach((s, idx)=>{
+    const color = sessionColor(s, idx);
+    const path  = (s.path||[]).filter(p=>p.lat!=null).map(p=>[p.lat, p.lng]);
+    const t = new Date(s.start_time*1000).toLocaleString();
+    const popupHtml = `
+      <div class="pin-pop-title">${s.name}</div>
+      <div class="pin-pop-row">Damage found: <strong>${s.total_damage}</strong></div>
+      <div class="pin-pop-row">Distance: <strong>${(s.distance_km||0).toFixed(2)} km</strong></div>
+      <div class="pin-pop-row">Cost: <strong>฿${(s.total_cost||0).toLocaleString()}</strong></div>
+      <div class="pin-pop-row">${t}</div>
+      <button class="pin-pop-btn" onclick="openSession(${s.id})">View session →</button>`;
+
+    // ── the survey path as a bright line ──
+    if(path.length >= 2){
+      const casing = L.polyline(path, {color:'#000', weight:7, opacity:.35}).addTo(map);
+      const line = L.polyline(path, {color, weight:4, opacity:.95, lineCap:'round', lineJoin:'round'}).addTo(map);
+      line.bindPopup(popupHtml);
+      line.on('mouseover',()=>line.setStyle({weight:6}));
+      line.on('mouseout', ()=>line.setStyle({weight:4}));
+      sessionMarkers.push(casing, line);
+      path.forEach(p=>allLatLngs.push(p));
+    }
+
+    // ── start / end flags ──
+    const sl = s.start_location;
+    if(sl && sl.lat!=null){
+      const startM = L.marker([sl.lat, sl.lng], {icon: flagIcon(color,'start')}).addTo(map).bindPopup(popupHtml);
+      sessionMarkers.push(startM); allLatLngs.push([sl.lat, sl.lng]);
+    }
+    const el = s.end_location;
+    if(el && el.lat!=null && s.status==='ended'){
+      const endM = L.marker([el.lat, el.lng], {icon: flagIcon(color,'end')}).addTo(map);
+      sessionMarkers.push(endM); allLatLngs.push([el.lat, el.lng]);
+    }
+
+    // ── damage pins along the path (coloured by severity) ──
+    (s.damage_points||[]).forEach(d=>{
+      if(d.lat==null) return;
+      const c = SEV_COLOR[d.severity] || SEV_COLOR.low;
+      const dot = L.circleMarker([d.lat, d.lng], {
+        radius:6, color:'#0a0a0a', weight:1.5, fillColor:c, fillOpacity:1
+      }).addTo(map);
+      dot.bindPopup(`
+        <div class="pin-pop-title">${d.class}</div>
+        <div class="pin-pop-row">Severity: <strong style="color:${c}">${(d.severity||'').toUpperCase()}</strong></div>
+        <div class="pin-pop-row">Cost: <strong>฿${(d.cost_thb||0).toLocaleString()}</strong></div>
+        <div class="pin-pop-row">Confidence: <strong>${((d.confidence||0)*100).toFixed(0)}%</strong></div>
+        <button class="pin-pop-btn" onclick="openSession(${s.id})">View survey →</button>`);
+      sessionMarkers.push(dot); allLatLngs.push([d.lat, d.lng]);
+    });
+
+    // ── live position marker on the active survey ──
+    if(s.status==='active' && path.length){
+      const tip = path[path.length-1];
+      const here = L.marker(tip, {icon: L.divIcon({className:'', iconSize:[16,16], iconAnchor:[8,8],
+        html:`<div class="map-pin here"></div>`})}).addTo(map);
+      sessionMarkers.push(here);
+    }
+  });
+
+  if(allLatLngs.length){
+    map.fitBounds(L.latLngBounds(allLatLngs).pad(0.25), {maxZoom:17});
+  }
+}
+
+function updateSurveyBanner(s){
+  activeSessionId = s ? s.id : null;
+  const dot = document.getElementById('surveyDot');
+  const txt = document.getElementById('surveyStatusText');
+  const meta= document.getElementById('surveyMeta');
+  const startBtn = document.getElementById('btnStartSurvey');
+  const endBtn   = document.getElementById('btnEndSurvey');
+
+  if(s){
+    dot.classList.add('live');
+    txt.textContent = 'Surveying: '+s.name;
+    meta.innerHTML = `<strong>${s.total_damage}</strong> damage · started ${new Date(s.start_time*1000).toLocaleTimeString()}`;
+    startBtn.style.display='none'; endBtn.style.display='';
+  }else{
+    dot.classList.remove('live');
+    txt.textContent = 'No active survey';
+    meta.textContent = '';
+    startBtn.style.display=''; endBtn.style.display='none';
+  }
+}
+
+// ── Start survey flow ──────────────────────────────────────
+async function openStartSurvey(){
+  // populate preset dropdown
+  const sel = document.getElementById('startLocSelect');
+  let locs = MOCK_LOCS;
+  if(isConnected){
+    try{ const r=await fetch(deviceUrl+'/mock-locations',{signal:AbortSignal.timeout(3000)});
+         if(r.ok) locs=(await r.json()).locations; }catch(e){}
+  }
+  sel.innerHTML = '<option value="">— Select a road —</option>' +
+    locs.map((l,i)=>`<option value="${i}">${l.name}</option>`).join('');
+  window._startLocs = locs;
+  document.getElementById('startLat').value='';
+  document.getElementById('startLng').value='';
+  document.getElementById('startName').value='';
+  document.getElementById('startModal').classList.add('visible');
+}
+function onStartLocPreset(){
+  const i = document.getElementById('startLocSelect').value;
+  if(i==='') return;
+  const l = window._startLocs[i];
+  document.getElementById('startLat').value = l.lat;
+  document.getElementById('startLng').value = l.lng;
+  document.getElementById('startName').value = l.name;
+  setStartPoint(l.lat, l.lng);
+}
+function setStartPoint(lat, lng){
+  document.getElementById('startLat').value = (+lat).toFixed(5);
+  document.getElementById('startLng').value = (+lng).toFixed(5);
+  if(!map) return;
+  if(startPickMarker) map.removeLayer(startPickMarker);
+  startPickMarker = L.marker([lat,lng], {icon: L.divIcon({className:'', html:'<div class="map-pin here"></div>', iconSize:[18,18], iconAnchor:[9,9]})}).addTo(map);
+  map.panTo([lat,lng]);
+}
+function closeStartSurvey(){
+  document.getElementById('startModal').classList.remove('visible');
+  if(startPickMarker){ map.removeLayer(startPickMarker); startPickMarker=null; }
+}
+async function confirmStartSurvey(){
+  const lat = parseFloat(document.getElementById('startLat').value);
+  const lng = parseFloat(document.getElementById('startLng').value);
+  const name= document.getElementById('startName').value.trim() || 'Unnamed survey';
+  if(isNaN(lat)||isNaN(lng)){ alert('Pick a location first (preset or map click).'); return; }
+
+  if(!isConnected){
+    // demo: fabricate a local session
+    const id = (sessionData[0]?.id||0)+1;
+    DEMO_ACTIVE = {id, name, start_time:Date.now()/1000, start_location:{lat,lng,address:name}, total_damage:0, total_cost:0, distance_km:0, damage_summary:{}, events:[]};
+    updateSurveyBanner(DEMO_ACTIVE);
+    closeStartSurvey(); switchView('live');
+    return;
+  }
+  try{
+    const r = await fetch(deviceUrl+'/session/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,lat,lng}),signal:AbortSignal.timeout(4000)});
+    if(r.ok){
+      const d = await r.json();
+      updateSurveyBanner(d.session);
+      closeStartSurvey();
+      switchView('live');   // jump to live so they can start detecting
+    }
+  }catch(e){ alert('Could not start survey — is the device connected?'); }
+}
+
+// ── End survey flow ────────────────────────────────────────
+function openEndSurvey(){
+  const s = sessionDataActive();
+  const sum = document.getElementById('endSummary');
+  if(s){
+    sum.innerHTML = `Survey: <strong style="color:var(--text)">${s.name}</strong><br/>`+
+                    `Damage found: <strong style="color:var(--accent)">${s.total_damage}</strong><br/>`+
+                    `Est. cost: <strong style="color:var(--accent)">฿${(s.total_cost||0).toLocaleString()}</strong>`;
+  }
+  document.getElementById('endDistance').value='';
+  document.getElementById('endModal').classList.add('visible');
+}
+function closeEndSurvey(){ document.getElementById('endModal').classList.remove('visible'); }
+function sessionDataActive(){
+  if(!isConnected) return DEMO_ACTIVE;
+  return null; // banner already reflects active; summary fetched separately if needed
+}
+async function confirmEndSurvey(){
+  const dist = parseFloat(document.getElementById('endDistance').value);
+  const body = {};
+  if(!isNaN(dist)) body.distance_km = dist;
+
+  if(!isConnected){
+    if(DEMO_ACTIVE){
+      DEMO_ACTIVE.status='ended'; DEMO_ACTIVE.end_time=Date.now()/1000;
+      DEMO_ACTIVE.distance_km = isNaN(dist)?0:dist;
+      DEMO_SESSIONS.unshift(DEMO_ACTIVE); DEMO_ACTIVE=null;
+      sessionData = DEMO_SESSIONS.slice();
+    }
+    updateSurveyBanner(null); closeEndSurvey(); switchView('map'); renderSessions();
+    return;
+  }
+  try{
+    const r = await fetch(deviceUrl+'/session/end',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(4000)});
+    if(r.ok){ updateSurveyBanner(null); closeEndSurvey(); switchView('map'); loadSessions(); }
+  }catch(e){ alert('Could not end survey.'); }
+}
+
+// ════════════════════════════════════════════════════════════
+//  SESSION DETAIL
+// ════════════════════════════════════════════════════════════
+const DAMAGE_COST_HINT = {pothole:850,'longitudinal crack':320,'transverse crack':320,'alligator crack':480,'surface damage':560};
+
+async function openSession(id){
+  viewingSessionId = id;
+  let s = sessionData.find(x=>x.id===id);
+  if(isConnected){
+    try{ const r=await fetch(deviceUrl+'/session/'+id,{signal:AbortSignal.timeout(4000)});
+         if(r.ok) s=await r.json(); }catch(e){}
+  }
+  if(!s) return;
+  renderSessionDetail(s);
+  switchView('session');
+}
+function reopenSession(){ if(viewingSessionId!=null) openSession(viewingSessionId); }
+
+function renderSessionDetail(s){
+  document.getElementById('crumbSession').textContent = s.name;
+  const start = new Date(s.start_time*1000);
+  const end   = s.end_time ? new Date(s.end_time*1000) : null;
+  const timeStr = start.toLocaleTimeString() + (end? ' — '+end.toLocaleTimeString() : ' (active)');
+  const dateStr = start.toLocaleDateString();
+  const dur = s.duration_sec ? Math.round(s.duration_sec/60) : 0;
+
+  const summary = s.damage_summary||{};
+  const maxCount = Math.max(1, ...Object.values(summary));
+  const typeRows = Object.entries(summary).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`
+    <div class="type-row" onclick="openGallery(${s.id}, ${JSON.stringify(type).replace(/"/g,'&quot;')})">
+      <div class="type-bar-wrap">
+        <div class="type-bar-top">
+          <span class="type-name">${type}</span>
+          <span class="type-count"><strong>${count}</strong> detection${count>1?'s':''}</span>
+        </div>
+        <div class="type-bar"><div class="type-bar-fill" style="width:${count/maxCount*100}%"></div></div>
+      </div>
+      <span class="type-arrow">›</span>
+    </div>`).join('') || '<p style="color:var(--muted2);font-family:Space Mono,monospace;font-size:.7rem">No damage recorded in this survey.</p>';
+
+  document.getElementById('sessionScroll').innerHTML = `
+    <div class="sess-head">
+      <div>
+        <div class="sess-title">📍 ${s.name}</div>
+        <div class="sess-submeta">
+          <span>🕐 <strong>${timeStr}</strong></span>
+          <span>📅 ${dateStr}</span>
+          <span>⏱ ~${dur} min</span>
+          <span>📏 <strong>${(s.distance_km||0).toFixed(2)} km</strong></span>
+          <span class="${s.status==='active'?'':''}">${s.status==='active'?'🟢 Active':'⚫ Ended'}</span>
+        </div>
+      </div>
+      ${isConnected?`<button class="btn btn-danger" onclick="deleteSession(${s.id})">🗑 Delete survey</button>`:''}
+    </div>
+    <div class="sess-kpis">
+      <div class="kpi"><div class="kpi-num">${s.total_damage||0}</div><div class="kpi-label">Total damage</div></div>
+      <div class="kpi"><div class="kpi-num">฿${(s.total_cost||0).toLocaleString()}</div><div class="kpi-label">Est. repair cost</div></div>
+      <div class="kpi"><div class="kpi-num neutral">${(s.total_area_m2||0).toFixed(3)} m²</div><div class="kpi-label">Damaged area</div></div>
+      <div class="kpi"><div class="kpi-num neutral">${Object.keys(summary).length}</div><div class="kpi-label">Damage types</div></div>
+    </div>
+    <div class="type-list-title">▸ Damage by type — tap to view photos</div>
+    ${typeRows}
+  `;
+}
+
+async function deleteSession(id){
+  if(!isConnected) return;
+  if(!confirm('Delete this entire survey and its damage records?')) return;
+  try{ await fetch(deviceUrl+'/session/'+id+'/delete',{method:'POST',signal:AbortSignal.timeout(3000)});
+       switchView('map'); loadSessions(); }catch(e){}
+}
+
+// ════════════════════════════════════════════════════════════
+//  DAMAGE GALLERY (by type within a session)
+// ════════════════════════════════════════════════════════════
+async function openGallery(sessionId, type){
+  document.getElementById('crumbType').textContent = type;
+  document.getElementById('crumbBackSession').textContent = (sessionData.find(x=>x.id===sessionId)?.name)||'Session';
+
+  let events = [];
+  if(isConnected){
+    try{ const r=await fetch(deviceUrl+'/session/'+sessionId+'/type/'+encodeURIComponent(type),{signal:AbortSignal.timeout(4000)});
+         if(r.ok) events=(await r.json()).events||[]; }catch(e){}
+  }else{
+    const s = sessionData.find(x=>x.id===sessionId);
+    events = (s?.events||[]).filter(e=>e.class===type);
+  }
+
+  const grid = document.getElementById('galleryGrid');
+  if(!events.length){ grid.innerHTML='<p style="color:var(--muted2);font-family:Space Mono,monospace;font-size:.7rem">No photos for this type.</p>'; switchView('gallery'); return; }
+
+  grid.innerHTML = events.map(e=>{
+    const t = new Date(e.timestamp*1000).toLocaleTimeString();
+    const thumb = e.thumbnail? `<img class="gal-thumb" src="${e.thumbnail}"/>` : `<div class="gal-thumb"></div>`;
+    return `<div class="gal-card" onclick='openEventFromGallery(${JSON.stringify(e).replace(/'/g,"&#39;")})'>
+      ${thumb}
+      <div class="gal-body">
+        <div class="gal-card-title">${e.class} ${sevBadge(e.severity)}</div>
+        <div class="gal-row"><span>Area</span><strong>${(e.area_m2!=null?e.area_m2.toFixed(4):'—')} m²</strong></div>
+        <div class="gal-row"><span>Cost</span><strong>฿${(e.cost_thb||0).toLocaleString()}</strong></div>
+        <div class="gal-row"><span>Confidence</span><strong>${((e.confidence||0)*100).toFixed(0)}%</strong></div>
+        <div class="gal-row"><span>Captured</span><span>${t}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+  switchView('gallery');
+}
+
+// Reuse the existing detail modal for a gallery item
+function openEventFromGallery(ev){
+  renderEventModal(ev);
+}
+
+// ── Demo data for offline preview ──────────────────────────
+const MOCK_LOCS = [
+  {name:'ถนนห้วยแก้ว (Huay Kaew Rd)', lat:18.7965, lng:98.9670},
+  {name:'ถนนนิมมานเหมินท์ (Nimman Rd)', lat:18.7964, lng:98.9669},
+  {name:'ถนนช้างเผือก (Chang Phueak Rd)', lat:18.8009, lng:98.9817},
+  {name:'ถนนสุเทพ (Suthep Rd)', lat:18.7896, lng:98.9580},
+  {name:'ถนนสมโภชเชียงใหม่ 700 ปี (700 Years Rd)', lat:18.8133, lng:98.9420},
+];
+let DEMO_ACTIVE = null;
+
+// JS mirror of the backend GPS simulator (for offline demo only)
+function simulateTrack(startLat, startLng, types, headingDeg){
+  let heading = (headingDeg!=null ? headingDeg*Math.PI/180 : Math.random()*2*Math.PI);
+  const path = [{lat:startLat, lng:startLng}];
+  const points = [];
+  let id = Math.floor(Math.random()*9000)+1000;
+  const SEVS = ['high','medium','low'];
+  const COST = {Pothole:850,'Alligator Crack':480,'Longitudinal Crack':320,'Transverse Crack':320,'Surface Damage':560};
+  types.forEach((cls,i)=>{
+    heading += (Math.random()-0.5)*0.44;
+    const last = path[path.length-1];
+    const dlat = 10*Math.cos(heading)/111320;
+    const dlng = 10*Math.sin(heading)/(111320*Math.cos(last.lat*Math.PI/180));
+    const lat = +(last.lat+dlat).toFixed(6), lng = +(last.lng+dlng).toFixed(6);
+    path.push({lat,lng});
+    const sev = SEVS[i%3];
+    points.push({id:id+i, lat, lng, class:cls, severity:sev,
+      cost_thb:Math.round((COST[cls]||400)*(0.3+Math.random()*0.5)),
+      confidence:+(0.72+Math.random()*0.24).toFixed(2)});
+  });
+  return {path, points};
+}
+
+// Expand a compact damage_summary into a flat type list
+function expandTypes(summary){
+  const out=[]; Object.entries(summary).forEach(([t,n])=>{ for(let i=0;i<n;i++) out.push(t); });
+  // interleave so the path shows variety rather than clusters
+  return out.sort(()=>Math.random()-0.5);
+}
+
+function buildDemoSessions(){
+  const defs = [
+    {id:2, name:'ถนนห้วยแก้ว (Huay Kaew Rd)', lat:18.7965, lng:98.9670, heading:35,
+     summary:{'Pothole':8,'Alligator Crack':4,'Longitudinal Crack':6}, ago:3600, dur:400},
+    {id:1, name:'ถนนสุเทพ (Suthep Rd)', lat:18.7896, lng:98.9580, heading:150,
+     summary:{'Surface Damage':3,'Transverse Crack':2}, ago:7200, dur:300},
+  ];
+  return defs.map(d=>{
+    const types = expandTypes(d.summary);
+    const {path, points} = simulateTrack(d.lat, d.lng, types, d.heading);
+    const total_cost = points.reduce((a,p)=>a+p.cost_thb,0);
+    const end = path[path.length-1];
+    return {
+      id:d.id, status:'ended', name:d.name,
+      start_time:Date.now()/1000-d.ago, end_time:Date.now()/1000-d.ago+d.dur,
+      distance_km:+(0.01*(path.length-1)).toFixed(3),
+      start_location:{lat:d.lat,lng:d.lng,address:d.name},
+      end_location:{lat:end.lat,lng:end.lng,address:d.name},
+      total_damage:points.length, total_cost, total_area_m2:+(points.length*0.02).toFixed(3),
+      damage_summary:d.summary, duration_sec:d.dur,
+      path, damage_points:points,
+      events: points.map(p=>({id:p.id,class:p.class,source:'auto',timestamp:Date.now()/1000-d.ago+Math.random()*d.dur,
+        confidence:p.confidence,severity:p.severity,cost_thb:p.cost_thb,area_m2:+(Math.random()*0.05).toFixed(4),
+        lat:p.lat,lng:p.lng,thumbnail:'',
+        detections:[{class:p.class,confidence:p.confidence,type:'bbox',bbox_width_cm:+(10+Math.random()*20).toFixed(1),bbox_height_cm:+(8+Math.random()*16).toFixed(1),bbox_area_cm2:+(80+Math.random()*500).toFixed(1)}]}))
+    };
+  });
+}
+let DEMO_SESSIONS = buildDemoSessions();
+
+// ── Init ───────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  initMap();
+  loadSessions();
+  setTimeout(reconnect,200);
+});
 
 // ── Damage history state ───────────────────────────────────
 let historyEvents = [];     // cached list from /events (with thumbnails)
@@ -993,7 +1645,11 @@ async function openEvent(id){
     }catch(e){}
   }
   if(!ev) return;
+  renderEventModal(ev);
+}
 
+function renderEventModal(ev){
+  activeEventId = ev.id;
   document.getElementById('modalClass').textContent = ev.class;
   document.getElementById('mdType').textContent     = ev.class;
   document.getElementById('mdSev').innerHTML         = sevBadge(ev.severity);
@@ -1045,11 +1701,12 @@ async function deleteEvent(){
 }
 
 // Close modal on Escape
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeStartSurvey(); closeEndSurvey(); } });
 
 // Poll history periodically while on the history tab (live device only)
 setInterval(()=>{
   if(currentView==='history' && isConnected) loadHistory();
+  if(currentView==='map' && isConnected) loadSessions();
 }, 4000);
 
 // ── Demo history (shown when no device connected) ──────────
@@ -1063,9 +1720,6 @@ const DEMO_HISTORY = [
   {id:4, class:'Alligator Crack', source:'manual', timestamp:Date.now()/1000-200, confidence:.84, severity:'high', cost_thb:1560, area_m2:0.0488,
    thumbnail:'', detections:[{class:'Alligator Crack',confidence:.84,type:'seg',seg_width_cm:24.0,seg_height_cm:20.3,seg_area_cm2:487.6}]},
 ];
-
-// ── Init ───────────────────────────────────────────────────
-window.addEventListener('load',()=>setTimeout(reconnect,200));
 </script>
 </body>
 </html>

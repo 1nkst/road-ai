@@ -21,6 +21,10 @@ WORKFLOW_ID = os.getenv("ROBOFLOW_WORKFLOW_ID","custom-workflow-2")
 CLOUD_URL   = os.getenv("CLOUD_API_URL",       None)
 CAMERA_IDX  = int(os.getenv("CAMERA_INDEX",   0))
 
+# AUTO-mode recording filters
+MIN_CONFIDENCE  = float(os.getenv("MIN_CONFIDENCE",  0.60))  # ignore weak detections (< 60%)
+DEDUP_COOLDOWN  = float(os.getenv("DEDUP_COOLDOWN",  5.0))   # secs to suppress same-class repeats
+
 INFERENCE_WIDTH  = 640
 INFERENCE_HEIGHT = 360
 DISPLAY_WIDTH    = 1280
@@ -55,12 +59,30 @@ session_start      = time.time()
 lock               = threading.Lock()
 running            = True
 detection_mode     = "auto"              # "auto" = continuous | "manual" = capture on demand
+last_auto_record   = {}                  # {class_name: timestamp} for AUTO dedup cooldown
 
-THUMB_WIDTH  = 360                       # stored thumbnail size for history viewer
-THUMB_HEIGHT = 203
+# ── Survey sessions ───────────────────────────────────────────
+sessions           = []                  # all surveys (active + ended), newest appended
+current_session    = None                # the active survey, or None
+session_counter    = 0                   # monotonic id source for sessions
+
+# Preset locations for local testing before GPS is wired up (Chiang Mai roads)
+MOCK_LOCATIONS = [
+    {"name": "ถนนห้วยแก้ว (Huay Kaew Rd)",        "lat": 18.7965, "lng": 98.9670},
+    {"name": "ถนนนิมมานเหมินท์ (Nimman Rd)",       "lat": 18.7964, "lng": 98.9669},
+    {"name": "ถนนช้างเผือก (Chang Phueak Rd)",     "lat": 18.8009, "lng": 98.9817},
+    {"name": "ถนนสุเทพ (Suthep Rd)",               "lat": 18.7896, "lng": 98.9580},
+    {"name": "ถนนเจริญเมือง (Charoen Muang Rd)",    "lat": 18.7869, "lng": 99.0089},
+    {"name": "ถนนมหิดล (Mahidol Rd)",              "lat": 18.7693, "lng": 98.9870},
+    {"name": "ถนนคันคลองชลประทาน (Canal Rd)",      "lat": 18.7833, "lng": 98.9520},
+    {"name": "ถนนสมโภชเชียงใหม่ 700 ปี (700 Years Rd)", "lat": 18.8133, "lng": 98.9420},
+]
+
+THUMB_WIDTH  = 320                       # stored thumbnail size for history viewer
+THUMB_HEIGHT = 180
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, allow_headers=['Content-Type'], methods=['GET', 'POST', 'OPTIONS'])
 
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -74,7 +96,7 @@ def make_thumbnail(frame, outputs):
     """Annotated low-res thumbnail (base64 data-URI) stored with each damage event."""
     annotated = draw_annotations(frame.copy(), outputs)
     thumb = cv2.resize(annotated, (THUMB_WIDTH, THUMB_HEIGHT))
-    _, buffer = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 55])
+    _, buffer = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 42])
     return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
 
 
@@ -111,6 +133,130 @@ def build_event(frame, outputs, detections, source):
         "detections": detections,
     }
     return event
+
+
+# ── Session helpers ───────────────────────────────────────────
+def haversine_km(lat1, lng1, lat2, lng2):
+    """Great-circle distance between two GPS points, in km."""
+    import math
+    R = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lng2 - lng1)
+    a = math.sin(dp/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+    return round(2 * R * math.asin(math.sqrt(a)), 4)
+
+
+def advance_gps(session, step_m=10.0):
+    """Simulate a GPS step ~step_m metres further along the survey path.
+    Adds slight heading jitter so the track looks like a real road.
+    Returns the new {lat, lng}. Replace with NEO-6M readings later.
+    Caller holds `lock`."""
+    import math, random
+    path = session.setdefault("path", [])
+    if not path:
+        sl = session["start_location"]
+        path.append({"lat": sl["lat"], "lng": sl["lng"]})
+    last = path[-1]
+    if last["lat"] is None:
+        return {"lat": None, "lng": None}
+    session["heading"] = session.get("heading", random.uniform(0, 2*math.pi)) + random.uniform(-0.22, 0.22)
+    h = session["heading"]
+    dlat = step_m * math.cos(h) / 111320.0
+    dlng = step_m * math.sin(h) / (111320.0 * max(0.1, math.cos(math.radians(last["lat"]))))
+    pt = {"lat": round(last["lat"] + dlat, 6), "lng": round(last["lng"] + dlng, 6)}
+    path.append(pt)
+    return pt
+
+
+def record_event_to_session(event):
+    """Append a damage event to the active session (if any) and stamp it with a
+    simulated GPS position ~10 m along the track. Caller holds `lock`."""
+    if current_session is not None and current_session["status"] == "active":
+        pt = advance_gps(current_session, step_m=10.0)
+        event["lat"] = pt["lat"]
+        event["lng"] = pt["lng"]
+        current_session["events"].append(event)
+
+
+def summarize_session(s, include_thumbs=False):
+    """Build a JSON-friendly summary of a session.
+    By default omits per-event thumbnails (lightweight list view)."""
+    events = s["events"]
+    by_type = {}
+    total_cost = 0.0
+    total_area = 0.0
+    for e in events:
+        by_type[e["class"]] = by_type.get(e["class"], 0) + 1
+        total_cost += e.get("cost_thb", 0) or 0
+        total_area += e.get("area_m2", 0) or 0
+
+    # GPS path + damage points for the map
+    path = s.get("path", [])
+    damage_points = [
+        {"id": e["id"], "lat": e.get("lat"), "lng": e.get("lng"),
+         "class": e["class"], "severity": e.get("severity", "low"),
+         "cost_thb": e.get("cost_thb", 0), "confidence": e.get("confidence", 0)}
+        for e in events if e.get("lat") is not None
+    ]
+
+    out = {
+        "id":              s["id"],
+        "status":          s["status"],
+        "name":            s["name"],
+        "start_time":      s["start_time"],
+        "end_time":        s["end_time"],
+        "start_location":  s["start_location"],
+        "end_location":    s["end_location"],
+        "distance_km":     s["distance_km"],
+        "damage_summary":  by_type,
+        "total_damage":    len(events),
+        "total_cost":      round(total_cost, 2),
+        "total_area_m2":   round(total_area, 4),
+        "duration_sec":    round((s["end_time"] or time.time()) - s["start_time"], 1),
+        "path":            path,
+        "damage_points":   damage_points,
+    }
+    if include_thumbs:
+        out["events"] = events
+    return out
+
+
+def filter_auto_detections(detections):
+    """For AUTO mode: keep only detections that are
+      (1) confident enough to be real road damage (>= MIN_CONFIDENCE), and
+      (2) not a repeat of the same class seen within DEDUP_COOLDOWN seconds.
+    Returns the subset of detections worth recording as a new damage event.
+    Updates the per-class cooldown timestamps as a side effect."""
+    now = time.time()
+    kept = []
+    seen_classes = set()
+
+    for d in detections:
+        cls  = d.get("class", "")
+        conf = d.get("confidence", 0)
+
+        # Segmentation entries ride along with their bbox; skip standalone seg here
+        if cls == "Segmentation":
+            continue
+
+        # (1) confidence gate — ignore weak/uncertain guesses
+        if conf < MIN_CONFIDENCE:
+            continue
+
+        # (2) dedup — same class recorded too recently → treat as same damage
+        last = last_auto_record.get(cls, 0)
+        if now - last < DEDUP_COOLDOWN:
+            continue
+
+        kept.append(d)
+        seen_classes.add(cls)
+
+    # Mark cooldown for everything we just accepted
+    for cls in seen_classes:
+        last_auto_record[cls] = now
+
+    return kept
 
 
 def get_cost_per_m2(class_name):
@@ -265,14 +411,21 @@ def inference_worker():
             if outputs is None:
                 continue
 
-            # NOTE: AUTO detections feed live stats only — they are NOT added to
-            # damage_events (the history list). Only MANUAL captures are recorded,
-            # to keep the reviewer's list free of auto false positives.
+            # AUTO detections feed live stats unconditionally.
+            # A damage EVENT is only recorded when the detection is confident
+            # enough to be real road damage AND is a genuinely new damage
+            # (not the same class seen within the last few seconds).
+            new_damage = filter_auto_detections(detections) if detections else []
+            event = build_event(frame, outputs, new_damage, "auto") if new_damage else None
+
             with lock:
                 latest_annotations = outputs
                 latest_detections  = detections
                 if detections:
                     detection_history.extend(detections)
+                if event and detection_mode == "auto":
+                    damage_events.append(event)
+                    record_event_to_session(event)
 
             if detections and CLOUD_URL:
                 threading.Thread(target=upload_to_cloud, args=(detections,), daemon=True).start()
@@ -364,44 +517,42 @@ def history():
 @app.route("/stats")
 def stats():
     """Session summary stats for the webapp dashboard."""
-    with lock:
-        hist = list(detection_history)
+    try:
+        with lock:
+            hist = list(detection_history)
 
-    uptime = round(time.time() - session_start)
-    total  = len(hist)
+        uptime = round(time.time() - session_start)
+        total  = len(hist)
 
-    # Count by class
-    class_counts = {}
-    for d in hist:
-        cls = d.get("class", "Unknown")
-        class_counts[cls] = class_counts.get(cls, 0) + 1
+        class_counts = {}
+        for d in hist:
+            cls = d.get("class", "Unknown")
+            class_counts[cls] = class_counts.get(cls, 0) + 1
 
-    # Total cost estimate
-    total_cost = sum(d.get("cost_thb", 0) for d in hist)
+        total_cost    = sum(d.get("cost_thb", 0) or 0 for d in hist)
+        total_area_m2 = sum(d.get("seg_area_m2", 0) or d.get("area_m2", 0) or 0 for d in hist)
 
-    # Total damaged area
-    total_area_m2 = sum(d.get("seg_area_m2", 0) or d.get("area_m2", 0) for d in hist)
+        sev_counts = {"low": 0, "medium": 0, "high": 0}
+        for d in hist:
+            s = d.get("severity", "low")
+            sev_counts[s] = sev_counts.get(s, 0) + 1
 
-    # Severity breakdown
-    sev_counts = {"low": 0, "medium": 0, "high": 0}
-    for d in hist:
-        s = d.get("severity", "low")
-        sev_counts[s] = sev_counts.get(s, 0) + 1
+        confs    = [d.get("confidence", 0) for d in hist if d.get("confidence") is not None]
+        avg_conf = round(sum(confs) / len(confs), 3) if confs else 0
 
-    # Avg confidence
-    confs = [d.get("confidence", 0) for d in hist]
-    avg_conf = round(sum(confs) / len(confs), 3) if confs else 0
-
-    return jsonify({
-        "uptime_seconds":  uptime,
-        "total_detections": total,
-        "class_counts":    class_counts,
-        "severity_counts": sev_counts,
-        "total_cost_thb":  total_cost,
-        "total_area_m2":   round(total_area_m2, 4),
-        "avg_confidence":  avg_conf,
-        "session_start":   session_start,
-    })
+        return jsonify({
+            "uptime_seconds":   uptime,
+            "total_detections": total,
+            "class_counts":     class_counts,
+            "severity_counts":  sev_counts,
+            "total_cost_thb":   total_cost,
+            "total_area_m2":    round(total_area_m2, 4),
+            "avg_confidence":   avg_conf,
+            "session_start":    session_start,
+        })
+    except Exception as e:
+        print(f"[Stats] ERROR: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/clear", methods=["POST"])
@@ -411,6 +562,7 @@ def clear_session():
     with lock:
         detection_history.clear()
         damage_events.clear()
+        last_auto_record.clear()
         session_start = time.time()
     return jsonify({"cleared": True})
 
@@ -483,7 +635,156 @@ def event_delete(event_id):
         damage_events.clear()
         damage_events.extend(kept)
         removed = before - len(damage_events)
+        # also remove from any session that holds it
+        for s in sessions:
+            s["events"] = [e for e in s["events"] if e["id"] != event_id]
     return jsonify({"deleted": removed > 0, "id": event_id})
+
+
+# ── Session endpoints ─────────────────────────────────────────
+@app.route("/mock-locations")
+def mock_locations():
+    """Preset locations for local testing before GPS is integrated."""
+    return jsonify({"locations": MOCK_LOCATIONS})
+
+
+@app.route("/session/current")
+def session_current():
+    """Status of the active survey, or null."""
+    with lock:
+        if current_session is None:
+            return jsonify({"active": False, "session": None})
+        return jsonify({"active": current_session["status"] == "active",
+                        "session": summarize_session(current_session)})
+
+
+@app.route("/session/start", methods=["POST"])
+def session_start():
+    """Begin a new survey. Body: {name, lat, lng}."""
+    global current_session, session_counter
+    body = request.get_json(silent=True) or {}
+    name = body.get("name") or "Unnamed survey"
+    lat  = body.get("lat")
+    lng  = body.get("lng")
+
+    with lock:
+        # auto-end any session left active
+        if current_session is not None and current_session["status"] == "active":
+            current_session["status"]   = "ended"
+            current_session["end_time"] = time.time()
+
+        session_counter += 1
+        import random, math
+        current_session = {
+            "id":             session_counter,
+            "status":         "active",
+            "name":           name,
+            "start_time":     time.time(),
+            "end_time":       None,
+            "start_location": {"lat": lat, "lng": lng, "address": name},
+            "end_location":   None,
+            "distance_km":    0.0,
+            "events":         [],
+            "path":           ([{"lat": lat, "lng": lng}] if lat is not None else []),
+            "heading":        random.uniform(0, 2*math.pi),
+        }
+        sessions.append(current_session)
+        summary = summarize_session(current_session)
+
+    print(f"[Session] START #{summary['id']} — {name}")
+    return jsonify({"started": True, "session": summary})
+
+
+@app.route("/session/end", methods=["POST"])
+def session_end():
+    """End the active survey. Body: {distance_km?, end_lat?, end_lng?, end_name?}.
+    If distance_km is omitted but end coords are given, it's computed via haversine."""
+    global current_session
+    body = request.get_json(silent=True) or {}
+
+    with lock:
+        if current_session is None or current_session["status"] != "active":
+            return jsonify({"error": "no active session"}), 400
+
+        s = current_session
+        s["status"]   = "ended"
+        s["end_time"] = time.time()
+
+        end_lat = body.get("end_lat")
+        end_lng = body.get("end_lng")
+        end_nm  = body.get("end_name") or s["name"]
+        # default the end point to wherever the simulated track finished
+        if end_lat is None and end_lng is None and s.get("path"):
+            tail = s["path"][-1]
+            end_lat, end_lng = tail["lat"], tail["lng"]
+        if end_lat is not None and end_lng is not None:
+            s["end_location"] = {"lat": end_lat, "lng": end_lng, "address": end_nm}
+
+        if body.get("distance_km") is not None:
+            try:
+                s["distance_km"] = round(float(body["distance_km"]), 4)
+            except (ValueError, TypeError):
+                pass
+        else:
+            # sum the length of the GPS track
+            path = s.get("path", [])
+            dist = 0.0
+            for a, b in zip(path, path[1:]):
+                if a["lat"] is not None and b["lat"] is not None:
+                    dist += haversine_km(a["lat"], a["lng"], b["lat"], b["lng"])
+            if dist > 0:
+                s["distance_km"] = round(dist, 4)
+
+        summary = summarize_session(s)
+        current_session = None
+
+    print(f"[Session] END #{summary['id']} — {summary['total_damage']} damages, {summary['distance_km']} km")
+    return jsonify({"ended": True, "session": summary})
+
+
+@app.route("/sessions")
+def sessions_list():
+    """All surveys (newest first) as lightweight summaries for the map."""
+    with lock:
+        out = [summarize_session(s) for s in sessions]
+    out.reverse()
+    return jsonify({"sessions": out, "count": len(out)})
+
+
+@app.route("/session/<int:session_id>")
+def session_detail(session_id):
+    """Full survey detail + damage breakdown by type (no thumbnails, lightweight)."""
+    with lock:
+        s = next((x for x in sessions if x["id"] == session_id), None)
+        if s is None:
+            return jsonify({"error": "session not found"}), 404
+        return jsonify(summarize_session(s))
+
+
+@app.route("/session/<int:session_id>/type/<damage_type>")
+def session_type_events(session_id, damage_type):
+    """All damage events of a given type within a session, with thumbnails."""
+    with lock:
+        s = next((x for x in sessions if x["id"] == session_id), None)
+        if s is None:
+            return jsonify({"error": "session not found"}), 404
+        evs = [e for e in s["events"] if e["class"] == damage_type]
+        evs = list(reversed(evs))
+    return jsonify({"session_id": session_id, "type": damage_type,
+                    "count": len(evs), "events": evs})
+
+
+@app.route("/session/<int:session_id>/delete", methods=["POST"])
+def session_delete(session_id):
+    """Delete a whole survey."""
+    global current_session
+    with lock:
+        before = len(sessions)
+        sessions[:] = [x for x in sessions if x["id"] != session_id]
+        if current_session is not None and current_session["id"] == session_id:
+            current_session = None
+        removed = before - len(sessions)
+    return jsonify({"deleted": removed > 0, "id": session_id})
 
 
 @app.route("/capture", methods=["POST"])
@@ -514,27 +815,35 @@ def capture():
             detection_history.extend(detections)
         if event:
             damage_events.append(event)
+            record_event_to_session(event)
 
     if detections and CLOUD_URL:
         threading.Thread(target=upload_to_cloud, args=(detections,), daemon=True).start()
 
-    # Return the annotated captured frame so the UI can show the frozen result
-    annotated = draw_annotations(frame.copy(), outputs)
-    _, buffer = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
-    frame_b64 = base64.b64encode(buffer).decode("utf-8")
+    # Return an annotated frame for the UI's frozen-result preview.
+    # If we already built an event thumbnail, reuse it (avoids a 2nd render+encode).
+    if event is not None:
+        frame_uri = event["thumbnail"]
+    else:
+        # No detections → still show the frozen frame, but downscaled + light JPEG for speed
+        preview = cv2.resize(frame, (640, 360))
+        _, buffer = cv2.imencode(".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 60])
+        frame_uri = "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
 
     return jsonify({
         "captured":   True,
         "detections": detections,
         "count":      len(detections),
         "event_id":   event["id"] if event else None,
-        "frame":      f"data:image/jpeg;base64,{frame_b64}",
+        "frame":      frame_uri,
     })
 
 
 @app.after_request
 def add_cors(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
 
@@ -548,6 +857,7 @@ if __name__ == "__main__":
     print(f"Docker inference: {API_URL}/{WORKSPACE}/workflows/{WORKFLOW_ID}")
     print(f"Camera index:     {CAMERA_IDX}")
     print(f"Cloud upload:     {'→ ' + CLOUD_URL if CLOUD_URL else 'disabled'}")
+    print(f"AUTO filters:     min conf {MIN_CONFIDENCE:.0%} · dedup {DEDUP_COOLDOWN:.0f}s")
     print("Endpoints:")
     print("  /video_feed  — live stream")
     print("  /detections  — latest frame detections")
@@ -558,6 +868,8 @@ if __name__ == "__main__":
     print("  /capture     — manual capture & detect (POST)")
     print("  /events      — damage history list (GET)")
     print("  /event/<id>  — full event detail (GET)")
+    print("  /sessions    — survey list for map (GET)")
+    print("  /session/... — start|end|detail|type (GET/POST)")
     print("=" * 50)
 
     app.run(host="0.0.0.0", port=5000, threaded=True)
