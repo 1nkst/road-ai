@@ -11,6 +11,13 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
+# onnxruntime is optional — only needed for the local ONNX backend. The Jetson
+# edge unit uses the Ultralytics backend instead, so don't hard-require it.
+try:
+    import onnxruntime as ort
+except ImportError:
+    ort = None
+
 load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────
@@ -21,9 +28,36 @@ WORKFLOW_ID = os.getenv("ROBOFLOW_WORKFLOW_ID","custom-workflow-2")
 CLOUD_URL   = os.getenv("CLOUD_API_URL",       None)
 CAMERA_IDX  = int(os.getenv("CAMERA_INDEX",   0))
 
+# Frame source: "local" = USB webcam on this machine | "remote" = frames pushed
+# by the Raspberry Pi via POST /upload. In remote mode the local camera is not opened.
+FRAME_SOURCE = os.getenv("FRAME_SOURCE", "local").lower()
+
+# Where annotated frames that CONTAIN a detection are written to disk.
+# Frames with no detection are never written (keeps the disk from filling up).
+SAVE_DIR = os.getenv("SAVE_DIR", "received_frames")
+os.makedirs(SAVE_DIR, exist_ok=True)
+
 # AUTO-mode recording filters
 MIN_CONFIDENCE  = float(os.getenv("MIN_CONFIDENCE",  0.60))  # ignore weak detections (< 60%)
 DEDUP_COOLDOWN  = float(os.getenv("DEDUP_COOLDOWN",  5.0))   # secs to suppress same-class repeats
+
+# ── ONNX local inference ──────────────────────────────────────
+USE_ONNX = os.getenv("USE_ONNX", "0").lower() in ("1", "true", "yes")
+ONNX_MODEL_PATH = os.getenv("ONNX_MODEL", os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "best.onnx"
+))
+ONNX_CLASS_NAMES = ["longitudinal crack", "pothole"]
+ONNX_CONF_THRESH = MIN_CONFIDENCE
+ONNX_SESSION     = None
+
+# ── Ultralytics local inference (YOLOv8 .pt on GPU — Jetson) ───
+# Highest-priority backend when enabled: runs a YOLO .pt model directly on the
+# GPU via the `ultralytics` package. Used on the Jetson Nano edge unit.
+USE_ULTRA = os.getenv("USE_ULTRA", "0").lower() in ("1", "true", "yes")
+ULTRA_MODEL_PATH = os.getenv("ULTRA_MODEL", os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "YOLOv8_Small_RDD.pt"
+))
+ULTRA_MODEL = None
 
 INFERENCE_WIDTH  = 640
 INFERENCE_HEIGHT = 360
@@ -52,6 +86,9 @@ latest_frame       = None
 latest_annotations = None
 output_frame       = None
 latest_detections  = []
+latest_gps         = (None, None)         # (lat, lng) from Pi GPS or None
+frame_seq          = 0                    # bumped on every new frame (lets the
+last_inferred_seq  = -1                   # inference worker skip frames it already saw)
 detection_history  = deque(maxlen=500)   # rolling history for session log (flat detections)
 damage_events      = deque(maxlen=300)   # grouped events w/ thumbnail for the history viewer
 event_counter      = 0                   # monotonic id source for events
@@ -100,6 +137,52 @@ def make_thumbnail(frame, outputs):
     return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
 
 
+def push_frame(frame, gps=(None, None)):
+    """Set a freshly-captured frame as the current one and render the annotated
+    output frame for the live stream. Shared by the local camera_worker and the
+    remote /upload endpoint, so both frame sources behave identically."""
+    global latest_frame, output_frame, frame_seq, latest_gps
+    with lock:
+        latest_frame = frame.copy()
+        frame_seq   += 1
+        annotations  = latest_annotations
+        if gps[0] is not None:
+            latest_gps = gps
+    display = draw_annotations(frame.copy(), annotations)
+    with lock:
+        output_frame = display.copy()
+
+
+def _sanitize(text):
+    """Make a string safe for use in a filename."""
+    keep = "".join(c if c.isalnum() else "_" for c in str(text))
+    return "_".join(p for p in keep.split("_") if p)  # collapse repeats
+
+
+def save_detected_frame(frame, outputs, event_id, damage_type="unknown",
+                        gps=(None, None), confidence=None):
+    """Write a full-resolution annotated frame to disk — ONLY called when the
+    frame contains at least one detection. Empty frames are never saved, so the
+    disk only ever holds frames with real road damage.
+
+    Filename encodes the metadata so each file is self-describing:
+        <time>-<lng>-<lat>-<damagetype>-conf<NN>-id<eid>.jpg
+    e.g. 20260617_143012-99.015567-18.757548-pothole-conf86-id42.jpg
+    """
+    ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+    lat, lng = gps
+    lat_str = f"{lat:.6f}" if lat is not None else "nofix"
+    lng_str = f"{lng:.6f}" if lng is not None else "nofix"
+    dmg     = _sanitize(damage_type)
+    conf    = f"-conf{round(confidence*100)}" if confidence is not None else ""
+    filename = os.path.join(
+        SAVE_DIR, f"{ts}-{lng_str}-{lat_str}-{dmg}{conf}-id{event_id}.jpg"
+    )
+    annotated = draw_annotations(frame.copy(), outputs)
+    cv2.imwrite(filename, annotated, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return filename
+
+
 def build_event(frame, outputs, detections, source):
     """Group a frame's detections into a single event with a thumbnail + id.
     Must be called while holding `lock` is NOT required (it locks internally)."""
@@ -132,6 +215,17 @@ def build_event(frame, outputs, detections, source):
         "thumbnail":  make_thumbnail(frame, outputs),
         "detections": detections,
     }
+    # Persist the annotated frame to disk (only happens for frames WITH damage).
+    try:
+        event["image_path"] = save_detected_frame(
+            frame, outputs, eid,
+            damage_type=primary.get("class", "unknown"),
+            gps=latest_gps,
+            confidence=primary.get("confidence"),
+        )
+    except Exception as e:
+        print(f"[Save] could not write frame for event {eid}: {e}")
+        event["image_path"] = None
     return event
 
 
@@ -170,10 +264,17 @@ def advance_gps(session, step_m=10.0):
 
 
 def record_event_to_session(event):
-    """Append a damage event to the active session (if any) and stamp it with a
-    simulated GPS position ~10 m along the track. Caller holds `lock`."""
+    """Append a damage event to the active session (if any) and stamp it with
+    the real GPS position from the Pi (if available) or a simulated fallback."""
     if current_session is not None and current_session["status"] == "active":
-        pt = advance_gps(current_session, step_m=10.0)
+        real_lat, real_lng = latest_gps
+        if real_lat is not None:
+            # Real GPS from NEO-6M — append to path and use directly
+            pt = {"lat": real_lat, "lng": real_lng}
+            current_session.setdefault("path", []).append(pt)
+        else:
+            # No GPS fix yet — fall back to random-walk simulation
+            pt = advance_gps(current_session, step_m=10.0)
         event["lat"] = pt["lat"]
         event["lng"] = pt["lng"]
         current_session["events"].append(event)
@@ -193,6 +294,16 @@ def summarize_session(s, include_thumbs=False):
 
     # GPS path + damage points for the map
     path = s.get("path", [])
+
+    # Live distance: sum the GPS track length so far (updates while active).
+    # If the session was ended with an explicit distance_km, prefer that.
+    live_dist = 0.0
+    for a, b in zip(path, path[1:]):
+        if a["lat"] is not None and b["lat"] is not None:
+            live_dist += haversine_km(a["lat"], a["lng"], b["lat"], b["lng"])
+    live_dist = round(live_dist, 4)
+    distance_km = s["distance_km"] if s["distance_km"] else live_dist
+
     damage_points = [
         {"id": e["id"], "lat": e.get("lat"), "lng": e.get("lng"),
          "class": e["class"], "severity": e.get("severity", "low"),
@@ -208,7 +319,7 @@ def summarize_session(s, include_thumbs=False):
         "end_time":        s["end_time"],
         "start_location":  s["start_location"],
         "end_location":    s["end_location"],
-        "distance_km":     s["distance_km"],
+        "distance_km":     distance_km,
         "damage_summary":  by_type,
         "total_damage":    len(events),
         "total_cost":      round(total_cost, 2),
@@ -326,10 +437,145 @@ def upload_to_cloud(detections):
         print(f"[Cloud] {e}")
 
 
+# ── ONNX inference helpers ────────────────────────────────────
+def _preprocess(frame):
+    """Resize + normalise a BGR frame to a (1,3,640,640) float32 tensor."""
+    img = cv2.resize(frame, (INFERENCE_WIDTH, INFERENCE_WIDTH))
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    return np.transpose(img, (2, 0, 1))[np.newaxis]          # CHW → NCHW
+
+
+def _parse_onnx_output(raw, orig_w, orig_h, conf_thresh):
+    """Parse the YOLO11-seg ONNX output into bbox + mask predictions.
+
+    YOLO11-seg exports two tensors:
+      output0  shape (1, 4+nc+32, num_anchors)  — box + cls + mask coefficients
+      output1  shape (1, 32, mh, mw)            — prototype masks
+
+    Returns (bbox_preds, seg_preds) in the same dict format the rest of
+    the pipeline already understands (same keys used by the old Roboflow path).
+    """
+    output0 = raw[0][0]          # (4+nc+32, num_anchors)
+    proto   = raw[1][0]          # (32, mh, mw)
+
+    nc      = len(ONNX_CLASS_NAMES)
+    box_dim = 4
+    mh, mw  = proto.shape[1], proto.shape[2]
+
+    # Transpose so each row is one anchor: (num_anchors, 4+nc+32)
+    preds = output0.T
+
+    bbox_preds, seg_preds = [], []
+
+    for pred in preds:
+        cls_scores = pred[box_dim:box_dim + nc]
+        conf       = float(cls_scores.max())
+        if conf < conf_thresh:
+            continue
+
+        cls_id   = int(cls_scores.argmax())
+        cx, cy, w, h = pred[:4]
+
+        # Convert from INFERENCE_WIDTH-space to display resolution
+        scale_x = orig_w / INFERENCE_WIDTH
+        scale_y = orig_h / INFERENCE_WIDTH
+        cx *= scale_x;  cy *= scale_y
+        w  *= scale_x;  h  *= scale_y
+
+        bbox_preds.append({
+            "class":      ONNX_CLASS_NAMES[cls_id],
+            "confidence": round(conf, 3),
+            "x": float(cx), "y": float(cy),
+            "width": float(w), "height": float(h),
+        })
+
+        # Build segmentation mask polygon for this anchor
+        mask_coefs = pred[box_dim + nc:]            # (32,)
+        mask_map   = (mask_coefs @ proto.reshape(32, -1)).reshape(mh, mw)
+        mask_map   = 1 / (1 + np.exp(-mask_map))   # sigmoid
+        mask_map   = (mask_map > 0.5).astype(np.uint8) * 255
+
+        # Scale mask to display size and extract polygon
+        mask_full  = cv2.resize(mask_map, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
+        contours, _ = cv2.findContours(mask_full, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if contours:
+            cnt    = max(contours, key=cv2.contourArea)
+            points = [{"x": float(p[0][0]), "y": float(p[0][1])} for p in cnt]
+            seg_preds.append({
+                "class":      ONNX_CLASS_NAMES[cls_id],
+                "confidence": round(conf, 3),
+                "points":     points,
+            })
+
+    return bbox_preds, seg_preds
+
+
 # ── Inference core (shared by auto worker + manual capture) ──
 def infer_frame(frame, source="auto"):
-    """Run inference on a single frame.
-    Returns (outputs, detections) — outputs for drawing, detections with metrics."""
+    """Run inference on a single frame. Backend priority:
+       1. Ultralytics YOLO .pt on GPU (Jetson edge unit)
+       2. Roboflow Docker API
+       3. local ONNX runtime
+    Returns (outputs, detections)."""
+    if ULTRA_MODEL is not None:
+        return _infer_ultralytics(frame, source)
+    elif API_URL and ONNX_SESSION is None:
+        return _infer_roboflow(frame, source)
+    elif ONNX_SESSION is not None:
+        return _infer_onnx(frame, source)
+    else:
+        print("[Inference] no inference backend available")
+        return None, []
+
+
+def _infer_ultralytics(frame, source="auto"):
+    """Run a YOLOv8 .pt model on the GPU via ultralytics.
+    Detection model (bounding boxes) — area is approximated from the bbox.
+    Returns ALL detections in the frame (not just the first)."""
+    results = ULTRA_MODEL.predict(
+        frame, conf=MIN_CONFIDENCE, verbose=False, device=0, imgsz=640
+    )[0]
+
+    bbox_preds = []
+    detections = []
+
+    if results.boxes is not None:
+        for b in results.boxes:
+            cls_id = int(b.cls)
+            conf   = float(b.conf)
+            # xywh: centre-x, centre-y, width, height in the frame's own pixels
+            cx, cy, w, h = (float(v) for v in b.xywh[0])
+            cls_name = ULTRA_MODEL.names.get(cls_id, f"class{cls_id}")
+
+            bbox = {
+                "class": cls_name, "confidence": round(conf, 3),
+                "x": cx, "y": cy, "width": w, "height": h,
+            }
+            bbox_preds.append(bbox)
+
+            metrics = calculate_metrics(pred_bbox=bbox)
+            det = {
+                "class":      cls_name,
+                "confidence": round(conf, 3),
+                "type":       "bbox",
+                "source":     source,
+                "timestamp":  time.time(),
+                **metrics,
+            }
+            det["severity"] = severity(det)
+            det.update(estimate_cost(det))
+            detections.append(det)
+
+    # No segmentation from a detect model — leave model_1_predictions empty.
+    outputs = {
+        "predictions":         {"predictions": bbox_preds},
+        "model_1_predictions": {"predictions": []},
+    }
+    return outputs, detections
+
+
+def _infer_roboflow(frame, source="auto"):
+    """Call the Roboflow Docker inference server."""
     url = f"{API_URL}/{WORKSPACE}/workflows/{WORKFLOW_ID}"
     payload = {
         "api_key":  API_KEY,
@@ -390,9 +636,56 @@ def infer_frame(frame, source="auto"):
     return outputs, detections
 
 
+def _infer_onnx(frame, source="auto"):
+    """Run local ONNX inference."""
+    tensor = _preprocess(frame)
+    raw    = ONNX_SESSION.run(None, {ONNX_SESSION.get_inputs()[0].name: tensor})
+
+    h, w = frame.shape[:2]
+    bbox_preds, seg_preds = _parse_onnx_output(raw, w, h, ONNX_CONF_THRESH)
+
+    outputs = {
+        "predictions":         {"predictions": bbox_preds},
+        "model_1_predictions": {"predictions": seg_preds},
+    }
+
+    detections = []
+    bbox    = bbox_preds[0] if bbox_preds else None
+    seg     = seg_preds[0]  if seg_preds  else None
+    metrics = calculate_metrics(pred_bbox=bbox, pred_seg=seg)
+
+    if bbox:
+        det = {
+            "class":      bbox["class"],
+            "confidence": bbox["confidence"],
+            "type":       "bbox",
+            "source":     source,
+            "timestamp":  time.time(),
+            **metrics,
+        }
+        det["severity"] = severity(det)
+        det.update(estimate_cost(det))
+        detections.append(det)
+
+    if seg:
+        det = {
+            "class":      seg["class"],
+            "confidence": seg["confidence"],
+            "type":       "seg",
+            "source":     source,
+            "timestamp":  time.time(),
+            **metrics,
+        }
+        det["severity"] = severity(det)
+        det.update(estimate_cost(det))
+        detections.append(det)
+
+    return outputs, detections
+
+
 # ── Inference worker (AUTO mode only) ─────────────────────────
 def inference_worker():
-    global latest_annotations, latest_detections
+    global latest_annotations, latest_detections, last_inferred_seq
 
     while running:
         # In MANUAL mode the worker idles — detection only happens via /capture
@@ -402,12 +695,20 @@ def inference_worker():
 
         with lock:
             frame = latest_frame.copy() if latest_frame is not None else None
+            seq   = frame_seq
         if frame is None:
             time.sleep(0.005)
             continue
+        # Skip frames we've already run inference on (avoids redundant API calls
+        # when the same Pi frame sits in latest_frame between 1 fps uploads).
+        if seq == last_inferred_seq:
+            time.sleep(0.01)
+            continue
+        last_inferred_seq = seq
 
         try:
             outputs, detections = infer_frame(frame, source="auto")
+            print(f"[Infer] seq={last_inferred_seq} detections={len(detections)}")
             if outputs is None:
                 continue
 
@@ -460,23 +761,39 @@ def draw_annotations(frame, annotations):
 
 # ── Camera worker ─────────────────────────────────────────────
 def camera_worker():
-    global latest_frame, output_frame
-    cap = cv2.VideoCapture(CAMERA_IDX)
+    """Local USB-webcam capture loop. Not started in remote (Pi) mode —
+    there the frames arrive via POST /upload instead.
+
+    On Linux (Jetson) we force the V4L2 backend + MJPG — the default GStreamer
+    backend fails on many USB webcams ('Internal data stream error'). On Windows
+    we let OpenCV pick its default backend."""
+    import sys
+    backend = cv2.CAP_V4L2 if sys.platform.startswith("linux") else cv2.CAP_ANY
+    cap = cv2.VideoCapture(CAMERA_IDX, backend)
+    if sys.platform.startswith("linux"):
+        # MJPG lets the webcam deliver 720p over USB without choking
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  DISPLAY_WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, DISPLAY_HEIGHT)
     cap.set(cv2.CAP_PROP_FPS, 30)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
+    if not cap.isOpened():
+        print(f"ERROR: could not open camera index {CAMERA_IDX}")
+        return
+    print(f"Camera opened (index {CAMERA_IDX}, backend {'V4L2' if backend==cv2.CAP_V4L2 else 'default'})")
+
+    fail = 0
     while running:
         ret, frame = cap.read()
         if not ret:
+            fail += 1
+            if fail % 30 == 0:
+                print(f"WARNING: camera read failed x{fail}")
+            time.sleep(0.03)
             continue
-        with lock:
-            latest_frame = frame.copy()
-            annotations  = latest_annotations
-        display = draw_annotations(frame.copy(), annotations)
-        with lock:
-            output_frame = display.copy()
+        fail = 0
+        push_frame(frame)
     cap.release()
 
 
@@ -497,6 +814,41 @@ def generate_stream():
 @app.route("/video_feed")
 def video_feed():
     return Response(generate_stream(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.route("/upload", methods=["POST"])
+def upload():
+    """Receive a JPEG frame pushed by the Raspberry Pi and feed it into the
+    same pipeline the local camera would. Inference, event-building, disk-saving
+    and streaming all happen exactly as in local mode."""
+    if "frame" not in request.files:
+        return jsonify({"status": "error", "message": "no 'frame' field"}), 400
+
+    data = request.files["frame"].read()
+    if not data:
+        return jsonify({"status": "error", "message": "empty file"}), 400
+
+    img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        return jsonify({"status": "error", "message": "could not decode JPEG"}), 400
+
+    # Match the display resolution the rest of the pipeline expects
+    if (img.shape[1], img.shape[0]) != (DISPLAY_WIDTH, DISPLAY_HEIGHT):
+        img = cv2.resize(img, (DISPLAY_WIDTH, DISPLAY_HEIGHT))
+
+    # Read GPS coordinates sent by the Pi (optional — falls back to simulation)
+    try:
+        pi_lat = float(request.form.get("lat")) if request.form.get("lat") else None
+        pi_lng = float(request.form.get("lng")) if request.form.get("lng") else None
+    except (ValueError, TypeError):
+        pi_lat, pi_lng = None, None
+
+    push_frame(img, gps=(pi_lat, pi_lng))
+    with lock:
+        seq = frame_seq
+    gps_str = f"GPS={pi_lat},{pi_lng}" if pi_lat is not None else "GPS=none"
+    print(f"[{time.strftime('%H:%M:%S')}] frame #{seq}  {gps_str}  ({len(data)/1024:.1f} KB)")
+    return jsonify({"status": "ok", "frame_id": seq})
 
 
 @app.route("/detections")
@@ -642,6 +994,14 @@ def event_delete(event_id):
 
 
 # ── Session endpoints ─────────────────────────────────────────
+@app.route("/gps")
+def gps_location():
+    """Latest GPS coordinates from the Pi. Returns {lat, lng, fix: true/false}."""
+    with lock:
+        lat, lng = latest_gps
+    return jsonify({"fix": lat is not None, "lat": lat, "lng": lng})
+
+
 @app.route("/mock-locations")
 def mock_locations():
     """Preset locations for local testing before GPS is integrated."""
@@ -659,7 +1019,7 @@ def session_current():
 
 
 @app.route("/session/start", methods=["POST"])
-def session_start():
+def session_start_route():
     """Begin a new survey. Body: {name, lat, lng}."""
     global current_session, session_counter
     body = request.get_json(silent=True) or {}
@@ -847,18 +1207,63 @@ def add_cors(response):
     return response
 
 
+def _load_ultralytics():
+    global ULTRA_MODEL
+    if not USE_ULTRA:
+        return
+    if not os.path.exists(ULTRA_MODEL_PATH):
+        print(f"WARNING: Ultralytics model not found at {ULTRA_MODEL_PATH} — skipping")
+        return
+    from ultralytics import YOLO
+    ULTRA_MODEL = YOLO(ULTRA_MODEL_PATH)
+    # Warm up the GPU so the first real frame isn't slow
+    warm = np.zeros((DISPLAY_HEIGHT, DISPLAY_WIDTH, 3), dtype=np.uint8)
+    ULTRA_MODEL.predict(warm, verbose=False, device=0, imgsz=640)
+    print(f"Ultralytics model loaded: {ULTRA_MODEL_PATH}")
+    print(f"Classes: {ULTRA_MODEL.names}")
+
+
+def _load_onnx():
+    global ONNX_SESSION
+    if USE_ULTRA:
+        return  # Ultralytics takes priority — don't also load ONNX
+    if not USE_ONNX:
+        print("ONNX inference disabled (USE_ONNX=0) — using Roboflow Docker")
+        return
+    if ort is None:
+        print("WARNING: onnxruntime not installed — ONNX backend unavailable")
+        return
+    if os.path.exists(ONNX_MODEL_PATH):
+        ONNX_SESSION = ort.InferenceSession(
+            ONNX_MODEL_PATH,
+            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+        )
+        print(f"ONNX model loaded: {ONNX_MODEL_PATH}")
+        print(f"Provider in use:   {ONNX_SESSION.get_providers()[0]}")
+    else:
+        print(f"WARNING: ONNX model not found at {ONNX_MODEL_PATH} — inference disabled")
+
+
 # ── Entry point ───────────────────────────────────────────────
 if __name__ == "__main__":
+    _load_ultralytics()
+    _load_onnx()
+
     threading.Thread(target=inference_worker, daemon=True).start()
-    threading.Thread(target=camera_worker,    daemon=True).start()
+    if FRAME_SOURCE == "remote":
+        print("Frame source:     REMOTE — waiting for Pi frames at POST /upload")
+    else:
+        threading.Thread(target=camera_worker, daemon=True).start()
 
     print("=" * 50)
     print("RoadAI running at http://localhost:5000")
     print(f"Docker inference: {API_URL}/{WORKSPACE}/workflows/{WORKFLOW_ID}")
-    print(f"Camera index:     {CAMERA_IDX}")
+    print(f"Frame source:     {FRAME_SOURCE}  (camera index {CAMERA_IDX} if local)")
+    print(f"Saving frames to: {os.path.abspath(SAVE_DIR)}  (only frames with damage)")
     print(f"Cloud upload:     {'→ ' + CLOUD_URL if CLOUD_URL else 'disabled'}")
     print(f"AUTO filters:     min conf {MIN_CONFIDENCE:.0%} · dedup {DEDUP_COOLDOWN:.0f}s")
     print("Endpoints:")
+    print("  /upload      — receive a frame from the Pi (POST)")
     print("  /video_feed  — live stream")
     print("  /detections  — latest frame detections")
     print("  /history     — full session log")

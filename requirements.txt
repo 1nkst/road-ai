@@ -1,0 +1,4 @@
+# Laptop — receiver server
+flask>=3.0,<4
+opencv-python>=4.9,<5
+requests>=2.31,<3

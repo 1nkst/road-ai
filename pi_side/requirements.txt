@@ -1,0 +1,3 @@
+# Raspberry Pi — capture script (no Flask needed)
+opencv-python>=4.9,<5
+requests>=2.31,<3
