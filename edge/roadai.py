@@ -11,6 +11,8 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
+import gps_reader  # local NEO-6M reader; safe to import even without pyserial
+
 # onnxruntime is optional — only needed for the local ONNX backend. The Jetson
 # edge unit uses the Ultralytics backend instead, so don't hard-require it.
 try:
@@ -31,6 +33,10 @@ CAMERA_IDX  = int(os.getenv("CAMERA_INDEX",   0))
 # Frame source: "local" = USB webcam on this machine | "remote" = frames pushed
 # by the Raspberry Pi via POST /upload. In remote mode the local camera is not opened.
 FRAME_SOURCE = os.getenv("FRAME_SOURCE", "local").lower()
+
+# Read GPS directly from a NEO-6M wired to THIS machine's UART (the Jetson edge
+# unit). When off, GPS comes from the Pi's /upload payload instead (legacy).
+USE_LOCAL_GPS = os.getenv("USE_LOCAL_GPS", "0").lower() in ("1", "true", "yes")
 
 # Where annotated frames that CONTAIN a detection are written to disk.
 # Frames with no detection are never written (keeps the disk from filling up).
@@ -575,7 +581,8 @@ def _infer_ultralytics(frame, source="auto"):
 
 
 def _infer_roboflow(frame, source="auto"):
-    """Call the Roboflow Docker inference server."""
+    """Call the Roboflow workflow endpoint (serverless cloud or local server,
+    set by ROBOFLOW_API_URL). Returns (outputs, detections)."""
     url = f"{API_URL}/{WORKSPACE}/workflows/{WORKFLOW_ID}"
     payload = {
         "api_key":  API_KEY,
@@ -793,7 +800,10 @@ def camera_worker():
             time.sleep(0.03)
             continue
         fail = 0
-        push_frame(frame)
+        # Tag the frame with the live local GPS fix (Jetson). If no module / no
+        # fix, get_location() returns (None, None) and push_frame keeps the last.
+        gps = gps_reader.get_location() if USE_LOCAL_GPS else (None, None)
+        push_frame(frame, gps=gps)
     cap.release()
 
 
@@ -1248,6 +1258,9 @@ def _load_onnx():
 if __name__ == "__main__":
     _load_ultralytics()
     _load_onnx()
+
+    if USE_LOCAL_GPS:
+        gps_reader.start()
 
     threading.Thread(target=inference_worker, daemon=True).start()
     if FRAME_SOURCE == "remote":

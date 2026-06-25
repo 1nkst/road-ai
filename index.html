@@ -345,11 +345,16 @@
       <div class="mode-opt active" id="modeManual" onclick="setMode('manual')">MANUAL</div>
     </div>
     <div class="device-wrap">
-      <span class="device-label">Device:</span>
-      <input class="device-input" id="deviceUrl" value="http://localhost:5000" placeholder="http://192.168.x.x:5000"/>
-      <button class="btn btn-primary" onclick="reconnect()">Connect</button>
+      <span class="device-label" data-i18n="deviceLabel">อุปกรณ์:</span>
+      <input class="device-input" id="deviceUrl" list="ipList" value="http://192.168.1.161:5000" placeholder="http://192.168.x.x:5000"/>
+      <datalist id="ipList">
+        <option value="http://192.168.1.161:5000">Jetson edge unit</option>
+        <option value="http://localhost:5000">Local</option>
+      </datalist>
+      <button class="btn btn-primary" onclick="reconnect()" data-i18n="connect">เชื่อมต่อ</button>
     </div>
-    <button class="btn btn-danger" onclick="clearSession()" title="Reset session data">↺ New Session</button>
+    <button class="btn btn-ghost" id="langToggle" onclick="toggleLang()" title="Language / ภาษา">🌐 EN</button>
+    <button class="btn btn-danger" onclick="clearSession()" title="Reset session data"><span data-i18n="newSession">↺ เริ่มเซสชันใหม่</span></button>
   </div>
 
   <div class="header-time" id="clock">--:--:--</div>
@@ -358,14 +363,14 @@
 <!-- ── VIEW TABS ── -->
 <div class="view-tabs">
   <div class="view-tab active" id="tabMap" onclick="switchView('map')">
-    <span>🗺 Survey Map</span>
+    <span>🗺 <span data-i18n="tabMap">แผนที่สำรวจ</span></span>
     <span class="count-pill" id="sessionCount">0</span>
   </div>
   <div class="view-tab" id="tabLive" onclick="switchView('live')">
-    <span>◉ Live Detection</span>
+    <span>◉ <span data-i18n="tabLive">ตรวจจับสด</span></span>
   </div>
   <div class="view-tab" id="tabHistory" onclick="switchView('history')">
-    <span>▤ Damage History</span>
+    <span>▤ <span data-i18n="tabHistory">ประวัติความเสียหาย</span></span>
     <span class="count-pill" id="historyCount">0</span>
   </div>
 </div>
@@ -375,22 +380,22 @@
   <div class="survey-bar">
     <div class="survey-status">
       <span class="survey-dot" id="surveyDot"></span>
-      <span id="surveyStatusText">No active survey</span>
+      <span id="surveyStatusText" data-i18n="noActiveSurvey">ไม่มีการสำรวจที่กำลังทำงาน</span>
     </div>
     <span class="survey-meta" id="surveyMeta"></span>
     <div class="survey-spacer"></div>
-    <button class="btn btn-primary" id="btnStartSurvey" onclick="openStartSurvey()">▶ Start Survey</button>
-    <button class="btn btn-danger" id="btnEndSurvey" onclick="openEndSurvey()" style="display:none">■ End Survey</button>
+    <button class="btn btn-primary" id="btnStartSurvey" onclick="openStartSurvey()">▶ <span data-i18n="startSurvey">เริ่มสำรวจ</span></button>
+    <button class="btn btn-danger" id="btnEndSurvey" onclick="openEndSurvey()" style="display:none">■ <span data-i18n="endSurvey">จบการสำรวจ</span></button>
   </div>
   <div style="position:relative;flex:1">
     <div id="map"></div>
-    <div class="map-empty-hint" id="mapEmptyHint">No surveys yet.<br/>Start a survey to drop your first pin.</div>
+    <div class="map-empty-hint" id="mapEmptyHint" data-i18n="noSurveysYet">ยังไม่มีการสำรวจ<br/>เริ่มสำรวจเพื่อปักหมุดแรกของคุณ</div>
     <div class="map-legend">
-      <div class="map-legend-title">Damage severity</div>
-      <div class="map-legend-row"><span class="lg-dot" style="background:#ff3b3b"></span>High</div>
-      <div class="map-legend-row"><span class="lg-dot" style="background:#ffa726"></span>Medium</div>
-      <div class="map-legend-row"><span class="lg-dot" style="background:#ffe14d"></span>Low</div>
-      <div class="map-legend-row" style="margin-top:6px"><span class="lg-line"></span>Survey path</div>
+      <div class="map-legend-title" data-i18n="damageSeverity">ระดับความรุนแรง</div>
+      <div class="map-legend-row"><span class="lg-dot" style="background:#ff3b3b"></span><span data-i18n="sevHigh">สูง</span></div>
+      <div class="map-legend-row"><span class="lg-dot" style="background:#ffa726"></span><span data-i18n="sevMedium">ปานกลาง</span></div>
+      <div class="map-legend-row"><span class="lg-dot" style="background:#ffe14d"></span><span data-i18n="sevLow">ต่ำ</span></div>
+      <div class="map-legend-row" style="margin-top:6px"><span class="lg-line"></span><span data-i18n="surveyPath">เส้นทางสำรวจ</span></div>
     </div>
   </div>
 </div>
@@ -398,9 +403,9 @@
 <!-- ════════ SESSION DETAIL VIEW ════════ -->
 <div class="panel-view" id="sessionView">
   <div class="breadcrumb">
-    <span class="crumb" onclick="switchView('map')">Survey Map</span>
+    <span class="crumb" onclick="switchView('map')" data-i18n="tabMap">แผนที่สำรวจ</span>
     <span class="sep">›</span>
-    <span class="crumb here" id="crumbSession">Session</span>
+    <span class="crumb here" id="crumbSession" data-i18n="session">เซสชัน</span>
   </div>
   <div class="panel-scroll" id="sessionScroll"></div>
 </div>
@@ -408,11 +413,11 @@
 <!-- ════════ GALLERY VIEW ════════ -->
 <div class="panel-view" id="galleryView">
   <div class="breadcrumb">
-    <span class="crumb" onclick="switchView('map')">Survey Map</span>
+    <span class="crumb" onclick="switchView('map')" data-i18n="tabMap">แผนที่สำรวจ</span>
     <span class="sep">›</span>
-    <span class="crumb" id="crumbBackSession" onclick="reopenSession()">Session</span>
+    <span class="crumb" id="crumbBackSession" onclick="reopenSession()" data-i18n="session">เซสชัน</span>
     <span class="sep">›</span>
-    <span class="crumb here" id="crumbType">Damage type</span>
+    <span class="crumb here" id="crumbType" data-i18n="damageType">ประเภทความเสียหาย</span>
   </div>
   <div class="panel-scroll"><div class="gallery-grid" id="galleryGrid"></div></div>
 </div>
@@ -436,11 +441,11 @@
             <path d="M9 9l3-3 3 3M12 6v6"/>
           </svg>
         </div>
-        <div class="stream-placeholder-title">DEMO MODE</div>
-        <div class="stream-placeholder-sub">
-          No device connected.<br/>
-          Enter device IP above and press Connect.<br/>
-          <span style="color:#333">Local: http://localhost:5000</span>
+        <div class="stream-placeholder-title" data-i18n="demoMode">โหมดสาธิต</div>
+        <div class="stream-placeholder-sub" data-i18n="noDeviceConnected">
+          ไม่ได้เชื่อมต่ออุปกรณ์<br/>
+          กรอก IP ของอุปกรณ์ด้านบนแล้วกดเชื่อมต่อ<br/>
+          <span style="color:#333">Jetson: http://192.168.1.161:5000</span>
         </div>
         <div class="demo-grid">
           <div class="demo-card"><div class="demo-card-label">Object Det.</div><div class="demo-card-val">ROAD AI 9</div></div>
@@ -465,28 +470,24 @@
       <div class="capture-bar visible" id="captureBar">
         <button class="btn-capture" id="btnCapture" onclick="captureDetect()">
           <span class="capture-ring"></span>
-          <span id="btnCaptureText">CAPTURE &amp; DETECT</span>
+          <span id="btnCaptureText" data-i18n="captureDetect">ถ่ายและตรวจจับ</span>
         </button>
       </div>
     </div>
 
     <!-- Session summary bar -->
-    <div class="session-bar">
+    <div class="session-bar" style="grid-template-columns:repeat(3,1fr)">
       <div class="session-card">
         <div class="session-val" id="sumTotal">0</div>
-        <div class="session-label">Total Detections</div>
-      </div>
-      <div class="session-card">
-        <div class="session-val warn" id="sumCost">฿0</div>
-        <div class="session-label">Est. Repair Cost</div>
+        <div class="session-label" data-i18n="totalDetections">จำนวนที่ตรวจพบ</div>
       </div>
       <div class="session-card">
         <div class="session-val" id="sumArea">0 m²</div>
-        <div class="session-label">Damaged Area</div>
+        <div class="session-label" data-i18n="damagedArea">พื้นที่ความเสียหาย</div>
       </div>
       <div class="session-card">
         <div class="session-val danger" id="sumHigh">0</div>
-        <div class="session-label">High Severity</div>
+        <div class="session-label" data-i18n="highSeverity">ความรุนแรงสูง</div>
       </div>
     </div>
   </div>
@@ -496,54 +497,53 @@
 
     <!-- Stats -->
     <div class="sidebar-section">
-      <div class="sidebar-title">// Session Stats</div>
+      <div class="sidebar-title">// <span data-i18n="sessionStats">สถิติเซสชัน</span></div>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-value" id="statUptime">0s</div>
-          <div class="stat-label">Uptime</div>
+          <div class="stat-label" data-i18n="uptime">เวลาทำงาน</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="statAvgConf">—</div>
-          <div class="stat-label">Avg Conf</div>
+          <div class="stat-label" data-i18n="avgConf">ความเชื่อมั่นเฉลี่ย</div>
         </div>
       </div>
     </div>
 
     <!-- Current detection -->
     <div class="sidebar-section">
-      <div class="sidebar-title">// Current Detection</div>
+      <div class="sidebar-title">// <span data-i18n="currentDetection">การตรวจจับปัจจุบัน</span></div>
 
       <div class="metric-block">
-        <div class="metric-block-title">▸ Bounding Box</div>
-        <div class="metric-row"><span class="metric-key">Width</span><span class="metric-val" id="bboxW">—</span></div>
-        <div class="metric-row"><span class="metric-key">Height</span><span class="metric-val" id="bboxH">—</span></div>
-        <div class="metric-row"><span class="metric-key">Area</span><span class="metric-val" id="bboxArea">—</span></div>
+        <div class="metric-block-title">▸ <span data-i18n="boundingBox">กรอบขอบเขต</span></div>
+        <div class="metric-row"><span class="metric-key" data-i18n="width">กว้าง</span><span class="metric-val" id="bboxW">—</span></div>
+        <div class="metric-row"><span class="metric-key" data-i18n="height">สูง</span><span class="metric-val" id="bboxH">—</span></div>
+        <div class="metric-row"><span class="metric-key" data-i18n="area">พื้นที่</span><span class="metric-val" id="bboxArea">—</span></div>
       </div>
 
       <div class="metric-block">
-        <div class="metric-block-title">▸ Segmentation Mask</div>
-        <div class="metric-row"><span class="metric-key">Width</span><span class="metric-val" id="segW">—</span></div>
-        <div class="metric-row"><span class="metric-key">Height</span><span class="metric-val" id="segH">—</span></div>
-        <div class="metric-row"><span class="metric-key">Area</span><span class="metric-val" id="segArea">—</span></div>
+        <div class="metric-block-title">▸ <span data-i18n="segmentationMask">มาสก์เซกเมนต์</span></div>
+        <div class="metric-row"><span class="metric-key" data-i18n="width">กว้าง</span><span class="metric-val" id="segW">—</span></div>
+        <div class="metric-row"><span class="metric-key" data-i18n="height">สูง</span><span class="metric-val" id="segH">—</span></div>
+        <div class="metric-row"><span class="metric-key" data-i18n="area">พื้นที่</span><span class="metric-val" id="segArea">—</span></div>
       </div>
 
       <div class="metric-block">
-        <div class="metric-block-title">▸ Assessment</div>
-        <div class="metric-row"><span class="metric-key">Severity</span><span class="metric-val" id="curSeverity">—</span></div>
-        <div class="metric-row"><span class="metric-key">Est. Cost</span><span class="metric-val accent" id="curCost">—</span></div>
-        <div class="metric-row"><span class="metric-key">Damage Type</span><span class="metric-val" id="curClass">—</span></div>
+        <div class="metric-block-title">▸ <span data-i18n="assessment">การประเมิน</span></div>
+        <div class="metric-row"><span class="metric-key" data-i18n="severity">ความรุนแรง</span><span class="metric-val" id="curSeverity">—</span></div>
+        <div class="metric-row"><span class="metric-key" data-i18n="damageType">ประเภทความเสียหาย</span><span class="metric-val" id="curClass">—</span></div>
       </div>
     </div>
 
     <!-- Confidence -->
     <div class="sidebar-section">
-      <div class="sidebar-title">// Confidence</div>
+      <div class="sidebar-title">// <span data-i18n="confidence">ความเชื่อมั่น</span></div>
       <div class="conf-item">
-        <div class="conf-header"><span class="conf-name">Object Detection</span><span class="conf-pct" id="confBbox">—</span></div>
+        <div class="conf-header"><span class="conf-name" data-i18n="objectDetection">การตรวจจับวัตถุ</span><span class="conf-pct" id="confBbox">—</span></div>
         <div class="conf-bar-bg"><div class="conf-bar-fill" id="confBboxBar" style="width:0%"></div></div>
       </div>
       <div class="conf-item">
-        <div class="conf-header"><span class="conf-name">Segmentation</span><span class="conf-pct" id="confSeg">—</span></div>
+        <div class="conf-header"><span class="conf-name" data-i18n="segmentation">เซกเมนต์</span><span class="conf-pct" id="confSeg">—</span></div>
         <div class="conf-bar-bg"><div class="conf-bar-fill" id="confSegBar" style="width:0%"></div></div>
       </div>
     </div>
@@ -551,13 +551,13 @@
     <!-- Detection log -->
     <div class="log-section">
       <div class="log-header">
-        <div class="sidebar-title" style="margin-bottom:0">// Detection Log</div>
+        <div class="sidebar-title" style="margin-bottom:0">// <span data-i18n="detectionLog">บันทึกการตรวจจับ</span></div>
       </div>
       <div id="demoNotice" class="demo-notice" style="display:none">
-        <strong>⚡ DEMO MODE</strong>Simulated detections. Connect a device for live data.
+        <strong data-i18n="demoModeTag">⚡ โหมดสาธิต</strong><span data-i18n="demoNoticeText">การตรวจจับจำลอง เชื่อมต่ออุปกรณ์เพื่อดูข้อมูลจริง</span>
       </div>
       <div class="log-list" id="logList">
-        <div class="no-data">Waiting for detections...</div>
+        <div class="no-data" data-i18n="waitingDetections">กำลังรอการตรวจจับ...</div>
       </div>
     </div>
 
@@ -569,44 +569,43 @@
 <div class="history-view" id="historyView">
   <div class="history-toolbar">
     <div class="filter-group">
-      <span class="filter-label">Type</span>
+      <span class="filter-label" data-i18n="type">ประเภท</span>
       <select class="filter-select" id="filterType" onchange="renderHistory()">
-        <option value="all">All types</option>
+        <option value="all" data-i18n="allTypes">ทุกประเภท</option>
       </select>
     </div>
     <div class="filter-group">
-      <span class="filter-label">Severity</span>
+      <span class="filter-label" data-i18n="severity">ความรุนแรง</span>
       <select class="filter-select" id="filterSev" onchange="renderHistory()">
-        <option value="all">All</option>
-        <option value="high">High</option>
-        <option value="medium">Medium</option>
-        <option value="low">Low</option>
+        <option value="all" data-i18n="all">ทั้งหมด</option>
+        <option value="high" data-i18n="sevHigh">สูง</option>
+        <option value="medium" data-i18n="sevMedium">ปานกลาง</option>
+        <option value="low" data-i18n="sevLow">ต่ำ</option>
       </select>
     </div>
     <div class="filter-group">
-      <span class="filter-label">Source</span>
+      <span class="filter-label" data-i18n="source">แหล่งที่มา</span>
       <select class="filter-select" id="filterSource" onchange="renderHistory()">
-        <option value="all">All</option>
-        <option value="auto">Auto</option>
-        <option value="manual">Manual</option>
+        <option value="all" data-i18n="all">ทั้งหมด</option>
+        <option value="auto" data-i18n="auto">อัตโนมัติ</option>
+        <option value="manual" data-i18n="manual">ด้วยมือ</option>
       </select>
     </div>
     <div class="filter-group">
-      <span class="filter-label">Sort</span>
+      <span class="filter-label" data-i18n="sort">เรียงตาม</span>
       <select class="filter-select" id="sortBy" onchange="renderHistory()">
-        <option value="time_desc">Newest first</option>
-        <option value="time_asc">Oldest first</option>
-        <option value="cost_desc">Cost (high→low)</option>
-        <option value="area_desc">Area (large→small)</option>
-        <option value="sev_desc">Severity (high→low)</option>
+        <option value="time_desc" data-i18n="newestFirst">ใหม่สุดก่อน</option>
+        <option value="time_asc" data-i18n="oldestFirst">เก่าสุดก่อน</option>
+        <option value="area_desc" data-i18n="areaSort">พื้นที่ (มาก→น้อย)</option>
+        <option value="sev_desc" data-i18n="sevSort">ความรุนแรง (สูง→ต่ำ)</option>
       </select>
     </div>
     <div class="history-spacer"></div>
-    <button class="btn btn-ghost" onclick="loadHistory()">↻ Refresh</button>
-    <span class="history-count" id="historyShownCount">0 shown</span>
+    <button class="btn btn-ghost" onclick="loadHistory()">↻ <span data-i18n="refresh">รีเฟรช</span></button>
+    <span class="history-count" id="historyShownCount">0 <span data-i18n="shown">รายการ</span></span>
   </div>
   <div class="history-grid" id="historyGrid">
-    <div class="history-empty">No damage captured yet.<br/>Detections will appear here automatically (AUTO) or when you capture (MANUAL).</div>
+    <div class="history-empty" data-i18n="noDamageYet">ยังไม่มีการบันทึกความเสียหาย<br/>การตรวจจับจะปรากฏที่นี่อัตโนมัติ (AUTO) หรือเมื่อคุณถ่าย (MANUAL)</div>
   </div>
 </div>
 
@@ -625,21 +624,20 @@
         <img id="modalImg" src="" alt="Captured damage"/>
       </div>
       <div class="modal-side">
-        <div class="modal-section-title">▸ Summary</div>
-        <div class="modal-row"><span class="modal-key">Damage Type</span><span class="modal-val" id="mdType">—</span></div>
-        <div class="modal-row"><span class="modal-key">Severity</span><span class="modal-val" id="mdSev">—</span></div>
-        <div class="modal-row"><span class="modal-key">Source</span><span class="modal-val" id="mdSource">—</span></div>
-        <div class="modal-row"><span class="modal-key">Confidence</span><span class="modal-val accent" id="mdConf">—</span></div>
-        <div class="modal-row"><span class="modal-key">Damaged Area</span><span class="modal-val" id="mdArea">—</span></div>
-        <div class="modal-row"><span class="modal-key">Est. Cost</span><span class="modal-val accent" id="mdCost">—</span></div>
-        <div class="modal-row"><span class="modal-key">Captured</span><span class="modal-val" id="mdTime">—</span></div>
+        <div class="modal-section-title">▸ <span data-i18n="summary">สรุป</span></div>
+        <div class="modal-row"><span class="modal-key" data-i18n="damageType">ประเภทความเสียหาย</span><span class="modal-val" id="mdType">—</span></div>
+        <div class="modal-row"><span class="modal-key" data-i18n="severity">ความรุนแรง</span><span class="modal-val" id="mdSev">—</span></div>
+        <div class="modal-row"><span class="modal-key" data-i18n="source">แหล่งที่มา</span><span class="modal-val" id="mdSource">—</span></div>
+        <div class="modal-row"><span class="modal-key" data-i18n="confidence">ความเชื่อมั่น</span><span class="modal-val accent" id="mdConf">—</span></div>
+        <div class="modal-row"><span class="modal-key" data-i18n="damagedArea">พื้นที่ความเสียหาย</span><span class="modal-val" id="mdArea">—</span></div>
+        <div class="modal-row"><span class="modal-key" data-i18n="captured">บันทึกเมื่อ</span><span class="modal-val" id="mdTime">—</span></div>
 
         <div id="mdDetections"></div>
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-danger" id="mdDeleteBtn" onclick="deleteEvent()">🗑 Delete (false positive)</button>
-      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+      <button class="btn btn-danger" id="mdDeleteBtn" onclick="deleteEvent()">🗑 <span data-i18n="deleteFalse">ลบ (ตรวจผิด)</span></button>
+      <button class="btn btn-ghost" onclick="closeModal()" data-i18n="close">ปิด</button>
     </div>
   </div>
 </div>
@@ -648,41 +646,41 @@
 <div class="modal-backdrop" id="startModal" onclick="if(event.target===this)closeStartSurvey()">
   <div class="modal" style="max-width:440px">
     <div class="modal-header">
-      <div class="modal-title"><span>▶</span><span>Start a Survey</span></div>
+      <div class="modal-title"><span>▶</span><span data-i18n="startSurveyTitle">เริ่มการสำรวจ</span></div>
       <button class="modal-close" onclick="closeStartSurvey()">✕</button>
     </div>
     <div style="padding:20px">
-      <div class="modal-section-title">▸ Road name</div>
+      <div class="modal-section-title">▸ <span data-i18n="roadName">ชื่อถนน</span></div>
       <div style="margin-bottom:14px">
         <input class="device-input" id="startName" style="width:100%;font-size:.82rem;padding:9px 12px" placeholder="e.g. ถนนห้วยแก้ว (Huay Kaew Rd)"/>
       </div>
 
-      <div class="modal-section-title">▸ Starting location</div>
-      <p style="font-size:.72rem;color:var(--muted2);margin-bottom:10px;line-height:1.6">Use live GPS, pick a preset road, or click anywhere on the map.</p>
+      <div class="modal-section-title">▸ <span data-i18n="startingLocation">ตำแหน่งเริ่มต้น</span></div>
+      <p style="font-size:.72rem;color:var(--muted2);margin-bottom:10px;line-height:1.6" data-i18n="startLocHint">ใช้ GPS สด เลือกถนนที่ตั้งไว้ หรือคลิกที่ใดก็ได้บนแผนที่</p>
 
       <div style="display:flex;gap:8px;margin-bottom:10px">
         <button class="btn btn-primary" style="flex:1;font-size:.72rem" onclick="useGpsLocation()">
-          ◎ Use Live GPS
+          ◎ <span data-i18n="useLiveGps">ใช้ GPS สด</span>
         </button>
         <select class="filter-select" id="startLocSelect" style="flex:2;padding:7px 10px;font-size:.72rem" onchange="onStartLocPreset()">
-          <option value="">— Preset road —</option>
+          <option value="" data-i18n="presetRoad">— ถนนที่ตั้งไว้ —</option>
         </select>
       </div>
 
       <div style="display:flex;gap:10px">
         <div style="flex:1">
-          <div class="modal-key" style="margin-bottom:4px">Latitude</div>
+          <div class="modal-key" style="margin-bottom:4px" data-i18n="latitude">ละติจูด</div>
           <input class="device-input" id="startLat" style="width:100%" placeholder="18.7965"/>
         </div>
         <div style="flex:1">
-          <div class="modal-key" style="margin-bottom:4px">Longitude</div>
+          <div class="modal-key" style="margin-bottom:4px" data-i18n="longitude">ลองจิจูด</div>
           <input class="device-input" id="startLng" style="width:100%" placeholder="98.9670"/>
         </div>
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeStartSurvey()">Cancel</button>
-      <button class="btn btn-primary" onclick="confirmStartSurvey()">Start Survey</button>
+      <button class="btn btn-ghost" onclick="closeStartSurvey()" data-i18n="cancel">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="confirmStartSurvey()" data-i18n="startSurvey">เริ่มสำรวจ</button>
     </div>
   </div>
 </div>
@@ -691,26 +689,113 @@
 <div class="modal-backdrop" id="endModal" onclick="if(event.target===this)closeEndSurvey()">
   <div class="modal" style="max-width:440px">
     <div class="modal-header">
-      <div class="modal-title"><span>■</span><span>End Survey</span></div>
+      <div class="modal-title"><span>■</span><span data-i18n="endSurvey">จบการสำรวจ</span></div>
       <button class="modal-close" onclick="closeEndSurvey()">✕</button>
     </div>
     <div style="padding:20px">
       <div id="endSummary" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:13px 15px;margin-bottom:16px;font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted2);line-height:1.9"></div>
-      <div class="modal-section-title">▸ Distance surveyed</div>
-      <p style="font-size:.72rem;color:var(--muted2);margin-bottom:10px;line-height:1.6">Enter the distance covered. With GPS this fills automatically from the track.</p>
+      <div class="modal-section-title">▸ <span data-i18n="distanceSurveyed">ระยะทางที่สำรวจ</span></div>
+      <p style="font-size:.72rem;color:var(--muted2);margin-bottom:10px;line-height:1.6" data-i18n="distanceHint">กรอกระยะทางที่ครอบคลุม เมื่อใช้ GPS จะเติมอัตโนมัติจากเส้นทาง</p>
       <div style="display:flex;align-items:center;gap:8px">
         <input class="device-input" id="endDistance" style="flex:1" placeholder="0.5"/>
         <span style="font-family:'Space Mono',monospace;font-size:.72rem;color:var(--muted2)">km</span>
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeEndSurvey()">Cancel</button>
-      <button class="btn btn-primary" onclick="confirmEndSurvey()">End &amp; Save Survey</button>
+      <button class="btn btn-ghost" onclick="closeEndSurvey()" data-i18n="cancel">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="confirmEndSurvey()" data-i18n="endSaveSurvey">จบและบันทึกการสำรวจ</button>
     </div>
   </div>
 </div>
 
 <script>
+// ── Internationalisation (Thai / English) ──────────────────
+const I18N = {
+  th:{
+    deviceLabel:'อุปกรณ์:', connect:'เชื่อมต่อ', newSession:'↺ เริ่มเซสชันใหม่',
+    tabMap:'แผนที่สำรวจ', tabLive:'ตรวจจับสด', tabHistory:'ประวัติความเสียหาย',
+    noActiveSurvey:'ไม่มีการสำรวจที่กำลังทำงาน', startSurvey:'เริ่มสำรวจ', endSurvey:'จบการสำรวจ',
+    noSurveysYet:'ยังไม่มีการสำรวจ<br/>เริ่มสำรวจเพื่อปักหมุดแรกของคุณ',
+    damageSeverity:'ระดับความรุนแรง', sevHigh:'สูง', sevMedium:'ปานกลาง', sevLow:'ต่ำ', surveyPath:'เส้นทางสำรวจ',
+    session:'เซสชัน', damageType:'ประเภทความเสียหาย', demoMode:'โหมดสาธิต',
+    noDeviceConnected:'ไม่ได้เชื่อมต่ออุปกรณ์<br/>กรอก IP ของอุปกรณ์ด้านบนแล้วกดเชื่อมต่อ<br/><span style="color:#333">Jetson: http://192.168.1.161:5000</span>',
+    captureDetect:'ถ่ายและตรวจจับ', totalDetections:'จำนวนที่ตรวจพบ', damagedArea:'พื้นที่ความเสียหาย', highSeverity:'ความรุนแรงสูง',
+    sessionStats:'สถิติเซสชัน', uptime:'เวลาทำงาน', avgConf:'ความเชื่อมั่นเฉลี่ย', currentDetection:'การตรวจจับปัจจุบัน',
+    boundingBox:'กรอบขอบเขต', width:'กว้าง', height:'สูง', area:'พื้นที่', segmentationMask:'มาสก์เซกเมนต์',
+    assessment:'การประเมิน', severity:'ความรุนแรง', confidence:'ความเชื่อมั่น', objectDetection:'การตรวจจับวัตถุ',
+    segmentation:'เซกเมนต์', detectionLog:'บันทึกการตรวจจับ', demoModeTag:'⚡ โหมดสาธิต',
+    demoNoticeText:'การตรวจจับจำลอง เชื่อมต่ออุปกรณ์เพื่อดูข้อมูลจริง', waitingDetections:'กำลังรอการตรวจจับ...',
+    type:'ประเภท', allTypes:'ทุกประเภท', all:'ทั้งหมด', auto:'อัตโนมัติ', manual:'ด้วยมือ', source:'แหล่งที่มา', sort:'เรียงตาม',
+    newestFirst:'ใหม่สุดก่อน', oldestFirst:'เก่าสุดก่อน', areaSort:'พื้นที่ (มาก→น้อย)', sevSort:'ความรุนแรง (สูง→ต่ำ)',
+    refresh:'รีเฟรช', shown:'รายการ', noDamageYet:'ยังไม่มีการบันทึกความเสียหาย<br/>การตรวจจับจะปรากฏที่นี่อัตโนมัติ (AUTO) หรือเมื่อคุณถ่าย (MANUAL)',
+    summary:'สรุป', captured:'บันทึกเมื่อ', deleteFalse:'ลบ (ตรวจผิด)', close:'ปิด',
+    startSurveyTitle:'เริ่มการสำรวจ', roadName:'ชื่อถนน', startingLocation:'ตำแหน่งเริ่มต้น',
+    startLocHint:'ใช้ GPS สด เลือกถนนที่ตั้งไว้ หรือคลิกที่ใดก็ได้บนแผนที่', useLiveGps:'ใช้ GPS สด', presetRoad:'— ถนนที่ตั้งไว้ —',
+    latitude:'ละติจูด', longitude:'ลองจิจูด', cancel:'ยกเลิก', distanceSurveyed:'ระยะทางที่สำรวจ',
+    distanceHint:'กรอกระยะทางที่ครอบคลุม เมื่อใช้ GPS จะเติมอัตโนมัติจากเส้นทาง', endSaveSurvey:'จบและบันทึกการสำรวจ',
+    sev_low:'ต่ำ', sev_medium:'ปานกลาง', sev_high:'สูง',
+    damageFound:'พบความเสียหาย', distance:'ระยะทาง', viewSession:'ดูเซสชัน', viewSurvey:'ดูการสำรวจ',
+    totalDamage:'ความเสียหายทั้งหมด', damageTypes:'ประเภทความเสียหาย', damageByType:'ความเสียหายตามประเภท — แตะเพื่อดูภาพ',
+    noMatchFilters:'ไม่มีความเสียหายที่ตรงกับตัวกรอง', detections:'การตรวจจับ',
+    videoManual:'// กล้อง — โหมดถ่ายด้วยมือ', videoRealtime:'// กล้อง — ตรวจจับแบบเรียลไทม์',
+    statusDemo:'โหมดสาธิต — ไม่มีอุปกรณ์', statusConnecting:'กำลังเชื่อมต่อ...', sessionCleared:'ล้างเซสชันแล้ว กำลังรอ...'
+  },
+  en:{
+    deviceLabel:'Device:', connect:'Connect', newSession:'↺ New Session',
+    tabMap:'Survey Map', tabLive:'Live Detection', tabHistory:'Damage History',
+    noActiveSurvey:'No active survey', startSurvey:'Start Survey', endSurvey:'End Survey',
+    noSurveysYet:'No surveys yet.<br/>Start a survey to drop your first pin.',
+    damageSeverity:'Damage severity', sevHigh:'High', sevMedium:'Medium', sevLow:'Low', surveyPath:'Survey path',
+    session:'Session', damageType:'Damage Type', demoMode:'DEMO MODE',
+    noDeviceConnected:'No device connected.<br/>Enter device IP above and press Connect.<br/><span style="color:#333">Jetson: http://192.168.1.161:5000</span>',
+    captureDetect:'CAPTURE &amp; DETECT', totalDetections:'Total Detections', damagedArea:'Damaged Area', highSeverity:'High Severity',
+    sessionStats:'Session Stats', uptime:'Uptime', avgConf:'Avg Conf', currentDetection:'Current Detection',
+    boundingBox:'Bounding Box', width:'Width', height:'Height', area:'Area', segmentationMask:'Segmentation Mask',
+    assessment:'Assessment', severity:'Severity', confidence:'Confidence', objectDetection:'Object Detection',
+    segmentation:'Segmentation', detectionLog:'Detection Log', demoModeTag:'⚡ DEMO MODE',
+    demoNoticeText:'Simulated detections. Connect a device for live data.', waitingDetections:'Waiting for detections...',
+    type:'Type', allTypes:'All types', all:'All', auto:'Auto', manual:'Manual', source:'Source', sort:'Sort',
+    newestFirst:'Newest first', oldestFirst:'Oldest first', areaSort:'Area (large→small)', sevSort:'Severity (high→low)',
+    refresh:'Refresh', shown:'shown', noDamageYet:'No damage captured yet.<br/>Detections will appear here automatically (AUTO) or when you capture (MANUAL).',
+    summary:'Summary', captured:'Captured', deleteFalse:'Delete (false positive)', close:'Close',
+    startSurveyTitle:'Start a Survey', roadName:'Road name', startingLocation:'Starting location',
+    startLocHint:'Use live GPS, pick a preset road, or click anywhere on the map.', useLiveGps:'Use Live GPS', presetRoad:'— Preset road —',
+    latitude:'Latitude', longitude:'Longitude', cancel:'Cancel', distanceSurveyed:'Distance surveyed',
+    distanceHint:'Enter the distance covered. With GPS this fills automatically from the track.', endSaveSurvey:'End &amp; Save Survey',
+    sev_low:'LOW', sev_medium:'MEDIUM', sev_high:'HIGH',
+    damageFound:'Damage found', distance:'Distance', viewSession:'View session', viewSurvey:'View survey',
+    totalDamage:'Total damage', damageTypes:'Damage types', damageByType:'Damage by type — tap to view photos',
+    noMatchFilters:'No damage matches these filters.', detections:'Detections',
+    videoManual:'// CAMERA FEED — MANUAL CAPTURE MODE', videoRealtime:'// CAMERA FEED — REAL-TIME INFERENCE',
+    statusDemo:'DEMO MODE — NO DEVICE', statusConnecting:'CONNECTING...', sessionCleared:'Session cleared. Waiting...'
+  }
+};
+let LANG = localStorage.getItem('roadai_lang') || 'th';
+function tr(k){ return (I18N[LANG] && I18N[LANG][k]!=null) ? I18N[LANG][k] : (I18N.en[k]!=null ? I18N.en[k] : ''); }
+function applyLang(){
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const v = tr(el.getAttribute('data-i18n'));
+    if(v) el.innerHTML = v;
+  });
+  // toggle button shows the OTHER language
+  document.getElementById('langToggle').textContent = LANG==='th' ? '🌐 EN' : '🌐 ไทย';
+  updateDynamicI18n();
+}
+function toggleLang(){
+  LANG = (LANG==='th') ? 'en' : 'th';
+  localStorage.setItem('roadai_lang', LANG);
+  applyLang();
+}
+function updateDynamicI18n(){
+  // Strings that JS sets at runtime, refreshed on language change
+  const vl = document.getElementById('videoLabel');
+  if(vl) vl.textContent = detectionMode==='manual' ? tr('videoManual') : tr('videoRealtime');
+  const st = document.getElementById('statusText');
+  if(st && !isConnected) st.textContent = tr('statusDemo');
+  if(typeof loadSessions==='function' && isConnected) { try{ updateSurveyBanner&&updateSurveyBanner(); }catch(e){} }
+}
+
 // ── Clock & uptime ─────────────────────────────────────────
 function updateClock(){ document.getElementById('clock').textContent = new Date().toLocaleTimeString() }
 setInterval(updateClock, 1000); updateClock();
@@ -724,7 +809,7 @@ setInterval(()=>{
 },1000);
 
 // ── Connection state ───────────────────────────────────────
-let deviceUrl   = 'http://localhost:5000';
+let deviceUrl   = localStorage.getItem('roadai_device') || 'http://192.168.1.161:5000';
 let isConnected = false;
 let confidences = [];
 let demoTimer   = null;
@@ -741,8 +826,8 @@ async function setMode(m){
   document.getElementById('modeManual').classList.toggle('active', m==='manual');
   document.getElementById('captureBar').classList.toggle('visible', m==='manual');
   document.getElementById('videoLabel').textContent = m==='manual'
-    ? '// CAMERA FEED — MANUAL CAPTURE MODE'
-    : '// CAMERA FEED — REAL-TIME INFERENCE';
+    ? tr('videoManual')
+    : tr('videoRealtime');
   hideCapturedOverlay();
 
   // Demo mode: toggle simulated detections off in manual
@@ -781,10 +866,9 @@ async function captureDetect(){
     setTimeout(()=>{
       const d = DEMO_DATA[demoIdx%DEMO_DATA.length]; demoIdx++;
       if(d.type==='bbox'){
-        addLogEntry(d.class, d.confidence, d.severity, d.cost_thb, true);
+        addLogEntry(d.class, d.confidence, d.severity, true);
         document.getElementById('curClass').textContent  = d.class;
         document.getElementById('curSeverity').innerHTML = sevBadge(d.severity);
-        document.getElementById('curCost').textContent   = '฿'+d.cost_thb.toLocaleString();
       }
       finishCapture(btn, txt);
     }, 700);
@@ -820,8 +904,7 @@ async function captureDetect(){
       document.getElementById('confBboxBar').style.width=pct+'%';
       document.getElementById('curClass').textContent    = bbox.class||'—';
       document.getElementById('curSeverity').innerHTML   = sevBadge(bbox.severity);
-      document.getElementById('curCost').textContent     = bbox.cost_thb!=null?'฿'+bbox.cost_thb.toLocaleString():'—';
-      addLogEntry(bbox.class, bbox.confidence, bbox.severity, bbox.cost_thb, false);
+      addLogEntry(bbox.class, bbox.confidence, bbox.severity, false);
       confidences.push(bbox.confidence);
     }
     if(seg){
@@ -868,10 +951,11 @@ function setConnected(v){
     text.textContent='LIVE — '+deviceUrl.replace('http://','');
     feed.style.display='block'; ph.style.display='none';
     badge.textContent='REC · LIVE'; notice.style.display='none';
+    rememberDevice(deviceUrl);
     stopDemo(); startStatsPolling();
   } else {
     pill.className='status-pill demo-mode';
-    text.textContent='DEMO MODE — NO DEVICE';
+    text.textContent=tr('statusDemo');
     feed.style.display='none'; ph.style.display='flex';
     badge.textContent='DEMO'; notice.style.display='block';
     startDemo(); stopStatsPolling();
@@ -880,8 +964,9 @@ function setConnected(v){
 
 function reconnect(){
   deviceUrl = document.getElementById('deviceUrl').value.trim().replace(/\/$/,'');
+  localStorage.setItem('roadai_device', deviceUrl);
   document.getElementById('statusPill').className='status-pill';
-  document.getElementById('statusText').textContent='CONNECTING...';
+  document.getElementById('statusText').textContent=tr('statusConnecting');
   document.getElementById('videoFeed').src = deviceUrl+'/video_feed?'+Date.now();
   fetch(deviceUrl+'/detections',{signal:AbortSignal.timeout(3000)})
     .then(r=>{ if(r.ok) setConnected(true); else throw new Error(); })
@@ -900,13 +985,36 @@ function reconnect(){
 function onStreamLoad(){ setConnected(true) }
 function onStreamError(){ if(isConnected) setConnected(false) }
 
+// ── Remembered devices (autofilled IP datalist) ───────────
+function rememberDevice(url){
+  if(!url) return;
+  let list = JSON.parse(localStorage.getItem('roadai_devices')||'[]');
+  if(!list.includes(url)){ list.unshift(url); list = list.slice(0,8); localStorage.setItem('roadai_devices', JSON.stringify(list)); }
+  renderDeviceList();
+}
+function renderDeviceList(){
+  const dl = document.getElementById('ipList');
+  const defaults = [
+    {v:'http://192.168.1.161:5000', label:'Jetson edge unit'},
+    {v:'http://localhost:5000',     label:'Local'}
+  ];
+  const saved = JSON.parse(localStorage.getItem('roadai_devices')||'[]');
+  const seen = new Set();
+  let html = '';
+  defaults.concat(saved.map(v=>({v,label:'Recent'}))).forEach(o=>{
+    if(seen.has(o.v)) return; seen.add(o.v);
+    html += `<option value="${o.v}">${o.label}</option>`;
+  });
+  dl.innerHTML = html;
+}
+
 // ── Clear session ──────────────────────────────────────────
 function clearSession(){
   if(!isConnected) return;
   fetch(deviceUrl+'/clear',{method:'POST'})
     .then(()=>{
       confidences=[];
-      document.getElementById('logList').innerHTML='<div class="no-data">Session cleared. Waiting...</div>';
+      document.getElementById('logList').innerHTML='<div class="no-data">'+tr('sessionCleared')+'</div>';
       updateSummary({total_detections:0,total_cost_thb:0,total_area_m2:0,severity_counts:{high:0}});
       historyEvents=[]; renderHistory(); updateHistoryCount();
     }).catch(()=>{});
@@ -945,7 +1053,6 @@ async function pollStats(){
 
 function updateSummary(d){
   document.getElementById('sumTotal').textContent = d.total_detections||0;
-  document.getElementById('sumCost').textContent  = '฿'+(d.total_cost_thb||0).toLocaleString();
   document.getElementById('sumArea').textContent  = (d.total_area_m2||0).toFixed(2)+' m²';
   document.getElementById('sumHigh').textContent  = (d.severity_counts&&d.severity_counts.high)||0;
 }
@@ -974,8 +1081,7 @@ setInterval(async ()=>{
       // Assessment
       document.getElementById('curClass').textContent    = bbox.class||'—';
       document.getElementById('curSeverity').innerHTML   = sevBadge(bbox.severity);
-      document.getElementById('curCost').textContent     = bbox.cost_thb!=null?'฿'+bbox.cost_thb.toLocaleString():'—';
-      addLogEntry(bbox.class, bbox.confidence, bbox.severity, bbox.cost_thb, false);
+      addLogEntry(bbox.class, bbox.confidence, bbox.severity, false);
     }
 
     if(seg){
@@ -1000,12 +1106,11 @@ setInterval(async ()=>{
 function sevBadge(sev){
   if(!sev) return '—';
   const map={low:'sev-low',medium:'sev-medium',high:'sev-high'};
-  const label={low:'LOW',medium:'MEDIUM',high:'HIGH'};
-  return `<span class="sev-badge ${map[sev]||'sev-low'}">${label[sev]||sev.toUpperCase()}</span>`;
+  return `<span class="sev-badge ${map[sev]||'sev-low'}">${tr('sev_'+sev)||sev.toUpperCase()}</span>`;
 }
 
 // ── Log entries ────────────────────────────────────────────
-function addLogEntry(type, confidence, severity, cost, isDemo){
+function addLogEntry(type, confidence, severity, isDemo){
   const list = document.getElementById('logList');
   const placeholder = list.querySelector('.no-data');
   if(placeholder) placeholder.remove();
@@ -1021,8 +1126,7 @@ function addLogEntry(type, confidence, severity, cost, isDemo){
     <div class="log-info">
       <div class="log-type">${type}${isDemo?' <span style="font-size:.5rem;color:var(--warn)">[DEMO]</span>':''}</div>
       <div class="log-meta">${new Date().toLocaleTimeString()} · ${sevBadge(severity)}</div>
-    </div>
-    <div class="log-cost">${cost!=null?'฿'+cost.toLocaleString():'—'}</div>`;
+    </div>`;
   list.insertBefore(item, list.firstChild);
   while(list.children.length>30) list.removeChild(list.lastChild);
 }
@@ -1051,10 +1155,9 @@ function startDemo(){
       document.getElementById('confBboxBar').style.width=pct+'%';
       document.getElementById('curClass').textContent   =bbox.class;
       document.getElementById('curSeverity').innerHTML  =sevBadge(bbox.severity);
-      document.getElementById('curCost').textContent    ='฿'+bbox.cost_thb.toLocaleString();
-      demoTotal++; demoCost+=bbox.cost_thb;
+      demoTotal++;
       if(bbox.severity==='high') demoHigh++;
-      addLogEntry(bbox.class,bbox.confidence,bbox.severity,bbox.cost_thb,true);
+      addLogEntry(bbox.class,bbox.confidence,bbox.severity,true);
     }
     if(seg){
       document.getElementById('segW').textContent    = seg.seg_width_cm+' cm';
@@ -1065,7 +1168,6 @@ function startDemo(){
       document.getElementById('confSegBar').style.width=pct+'%';
     }
     document.getElementById('sumTotal').textContent=demoTotal;
-    document.getElementById('sumCost').textContent ='฿'+demoCost.toLocaleString();
     document.getElementById('sumHigh').textContent =demoHigh;
     confidences.push(d.confidence);
     if(confidences.length>50) confidences=confidences.slice(-50);
@@ -1220,11 +1322,10 @@ function renderSessions(){
     const t = new Date(s.start_time*1000).toLocaleString();
     const popupHtml = `
       <div class="pin-pop-title">${s.name}</div>
-      <div class="pin-pop-row">Damage found: <strong>${s.total_damage}</strong></div>
-      <div class="pin-pop-row">Distance: <strong>${(s.distance_km||0).toFixed(2)} km</strong></div>
-      <div class="pin-pop-row">Cost: <strong>฿${(s.total_cost||0).toLocaleString()}</strong></div>
+      <div class="pin-pop-row">${tr('damageFound')}: <strong>${s.total_damage}</strong></div>
+      <div class="pin-pop-row">${tr('distance')}: <strong>${(s.distance_km||0).toFixed(2)} km</strong></div>
       <div class="pin-pop-row">${t}</div>
-      <button class="pin-pop-btn" onclick="openSession(${s.id})">View session →</button>`;
+      <button class="pin-pop-btn" onclick="openSession(${s.id})">${tr('viewSession')} →</button>`;
 
     // ── the survey path as a bright line ──
     if(path.length >= 2){
@@ -1258,10 +1359,9 @@ function renderSessions(){
       }).addTo(map);
       dot.bindPopup(`
         <div class="pin-pop-title">${d.class}</div>
-        <div class="pin-pop-row">Severity: <strong style="color:${c}">${(d.severity||'').toUpperCase()}</strong></div>
-        <div class="pin-pop-row">Cost: <strong>฿${(d.cost_thb||0).toLocaleString()}</strong></div>
-        <div class="pin-pop-row">Confidence: <strong>${((d.confidence||0)*100).toFixed(0)}%</strong></div>
-        <button class="pin-pop-btn" onclick="openSession(${s.id})">View survey →</button>`);
+        <div class="pin-pop-row">${tr('severity')}: <strong style="color:${c}">${tr('sev_'+(d.severity||'low'))}</strong></div>
+        <div class="pin-pop-row">${tr('confidence')}: <strong>${((d.confidence||0)*100).toFixed(0)}%</strong></div>
+        <button class="pin-pop-btn" onclick="openSession(${s.id})">${tr('viewSurvey')} →</button>`);
       sessionMarkers.push(dot); allLatLngs.push([d.lat, d.lng]);
     });
 
@@ -1379,9 +1479,8 @@ function openEndSurvey(){
   const s = sessionDataActive();
   const sum = document.getElementById('endSummary');
   if(s){
-    sum.innerHTML = `Survey: <strong style="color:var(--text)">${s.name}</strong><br/>`+
-                    `Damage found: <strong style="color:var(--accent)">${s.total_damage}</strong><br/>`+
-                    `Est. cost: <strong style="color:var(--accent)">฿${(s.total_cost||0).toLocaleString()}</strong>`;
+    sum.innerHTML = `${tr('roadName')}: <strong style="color:var(--text)">${s.name}</strong><br/>`+
+                    `${tr('damageFound')}: <strong style="color:var(--accent)">${s.total_damage}</strong>`;
   }
   document.getElementById('endDistance').value='';
   document.getElementById('endModal').classList.add('visible');
@@ -1467,12 +1566,11 @@ function renderSessionDetail(s){
       ${isConnected?`<button class="btn btn-danger" onclick="deleteSession(${s.id})">🗑 Delete survey</button>`:''}
     </div>
     <div class="sess-kpis">
-      <div class="kpi"><div class="kpi-num">${s.total_damage||0}</div><div class="kpi-label">Total damage</div></div>
-      <div class="kpi"><div class="kpi-num">฿${(s.total_cost||0).toLocaleString()}</div><div class="kpi-label">Est. repair cost</div></div>
-      <div class="kpi"><div class="kpi-num neutral">${(s.total_area_m2||0).toFixed(3)} m²</div><div class="kpi-label">Damaged area</div></div>
-      <div class="kpi"><div class="kpi-num neutral">${Object.keys(summary).length}</div><div class="kpi-label">Damage types</div></div>
+      <div class="kpi"><div class="kpi-num">${s.total_damage||0}</div><div class="kpi-label">${tr('totalDamage')}</div></div>
+      <div class="kpi"><div class="kpi-num neutral">${(s.total_area_m2||0).toFixed(3)} m²</div><div class="kpi-label">${tr('damagedArea')}</div></div>
+      <div class="kpi"><div class="kpi-num neutral">${Object.keys(summary).length}</div><div class="kpi-label">${tr('damageTypes')}</div></div>
     </div>
-    <div class="type-list-title">▸ Damage by type — tap to view photos</div>
+    <div class="type-list-title">▸ ${tr('damageByType')}</div>
     ${typeRows}
   `;
 }
@@ -1510,10 +1608,9 @@ async function openGallery(sessionId, type){
       ${thumb}
       <div class="gal-body">
         <div class="gal-card-title">${e.class} ${sevBadge(e.severity)}</div>
-        <div class="gal-row"><span>Area</span><strong>${(e.area_m2!=null?e.area_m2.toFixed(4):'—')} m²</strong></div>
-        <div class="gal-row"><span>Cost</span><strong>฿${(e.cost_thb||0).toLocaleString()}</strong></div>
-        <div class="gal-row"><span>Confidence</span><strong>${((e.confidence||0)*100).toFixed(0)}%</strong></div>
-        <div class="gal-row"><span>Captured</span><span>${t}</span></div>
+        <div class="gal-row"><span>${tr('area')}</span><strong>${(e.area_m2!=null?e.area_m2.toFixed(4):'—')} m²</strong></div>
+        <div class="gal-row"><span>${tr('confidence')}</span><strong>${((e.confidence||0)*100).toFixed(0)}%</strong></div>
+        <div class="gal-row"><span>${tr('captured')}</span><span>${t}</span></div>
       </div>
     </div>`;
   }).join('');
@@ -1597,6 +1694,9 @@ let DEMO_SESSIONS = buildDemoSessions();
 
 // ── Init ───────────────────────────────────────────────────
 window.addEventListener('load',()=>{
+  document.getElementById('deviceUrl').value = deviceUrl;  // restore saved/default IP
+  renderDeviceList();
+  applyLang();                                             // apply Thai (or saved) language
   initMap();
   loadSessions();
   setTimeout(reconnect,200);
@@ -1655,24 +1755,22 @@ function renderHistory(){
   items.sort((a,b)=>{
     switch(sort){
       case 'time_asc':  return a.timestamp-b.timestamp;
-      case 'cost_desc': return (b.cost_thb||0)-(a.cost_thb||0);
       case 'area_desc': return (b.area_m2||0)-(a.area_m2||0);
       case 'sev_desc':  return (SEV_RANK[b.severity]||0)-(SEV_RANK[a.severity]||0);
       default:          return b.timestamp-a.timestamp; // time_desc
     }
   });
 
-  document.getElementById('historyShownCount').textContent = items.length+' shown';
+  document.getElementById('historyShownCount').textContent = items.length+' '+tr('shown');
 
   if(items.length===0){
-    grid.innerHTML = '<div class="history-empty">No damage matches these filters.</div>';
+    grid.innerHTML = '<div class="history-empty">'+tr('noMatchFilters')+'</div>';
     return;
   }
 
   grid.innerHTML = items.map(e=>{
     const t = new Date(e.timestamp*1000).toLocaleTimeString();
     const area = (e.area_m2!=null? e.area_m2.toFixed(3):'—')+' m²';
-    const cost = e.cost_thb!=null ? '฿'+e.cost_thb.toLocaleString() : '—';
     const thumb = e.thumbnail
       ? `<img src="${e.thumbnail}" alt="${e.class}"/>`
       : `<div class="dmg-thumb-empty">▤</div>`;
@@ -1685,11 +1783,10 @@ function renderHistory(){
         <div class="dmg-body">
           <div class="dmg-class">${e.class}</div>
           <div class="dmg-meta">
-            <span class="dmg-stat"><strong>${cost}</strong></span>
+            <span class="dmg-stat"><strong>${area}</strong></span>
             ${sevBadge(e.severity)}
           </div>
           <div class="dmg-meta" style="margin-top:5px">
-            <span class="dmg-stat">${area}</span>
             <span class="dmg-stat">${(e.confidence*100||0).toFixed(0)}%</span>
           </div>
           <div class="dmg-time">${t}</div>
@@ -1722,7 +1819,6 @@ function renderEventModal(ev){
   document.getElementById('mdSource').textContent   = (ev.source||'').toUpperCase();
   document.getElementById('mdConf').textContent     = ((ev.confidence||0)*100).toFixed(1)+'%';
   document.getElementById('mdArea').textContent     = (ev.area_m2!=null?ev.area_m2.toFixed(4):'—')+' m²';
-  document.getElementById('mdCost').textContent     = ev.cost_thb!=null?'฿'+ev.cost_thb.toLocaleString():'—';
   document.getElementById('mdTime').textContent     = new Date(ev.timestamp*1000).toLocaleString();
   document.getElementById('modalImg').src           = ev.thumbnail||'';
 
@@ -1732,7 +1828,7 @@ function renderEventModal(ev){
   // Per-detection breakdown
   const dets = ev.detections||[];
   document.getElementById('mdDetections').innerHTML =
-    '<div class="modal-section-title" style="margin-top:16px">▸ Detections ('+dets.length+')</div>' +
+    '<div class="modal-section-title" style="margin-top:16px">▸ '+tr('detections')+' ('+dets.length+')</div>' +
     dets.map(d=>{
       const rows = [];
       if(d.bbox_width_cm!=null)  rows.push(['BBox W', d.bbox_width_cm+' cm']);
