@@ -1,0 +1,55 @@
+{
+  "_source": {
+    "document": "คู่มือการบำรุงรักษาทางหลวงชนบท (Rural Highway Maintenance Manual)",
+    "agency": "กรมทางหลวงชนบท กระทรวงคมนาคม (Department of Rural Roads, Ministry of Transport)",
+    "chapter": "บทที่ 5 — การประมาณราคาในงานซ่อมบำรุงปกติ (Ch.5 Cost estimation for routine maintenance)",
+    "file": "ค่มือทางหลวง_onweb.pdf",
+    "extracted": "2026-06-25",
+    "note": "Per-unit costs are the manual's own worked-example results (total activity cost / quantity). They already include labour + materials + machinery. Because fixed daily crew/machine costs are spread over the batch quantity, these rates assume a normal maintenance batch (as in the manual's examples, ~600-1200 m2). District 'ราคากลาง' may differ; treat these as the reference baseline."
+  },
+
+  "per_unit_repair_cost": {
+    "fog_seal":     { "th": "การฉาบผิวทางแบบฟ็อกซีล", "en": "Fog Seal",      "unit": "m2", "thb": 26.19,  "page": 113 },
+    "chip_seal":    { "th": "การฉาบผิวทางแบบชีพซีล",  "en": "Chip Seal",     "unit": "m2", "thb": 44.00,  "page": 114 },
+    "skin_patching":{ "th": "การปะซ่อมผิวทาง",        "en": "Skin Patching", "unit": "m2", "thb": 239.16, "page": 115 },
+    "deep_patching":{ "th": "การขุดซ่อมผิวทาง",       "en": "Deep Patching", "unit": "m2", "thb": 446.90, "page": 116 },
+    "crack_sealing":{ "th": "การอุดรอยแตก",           "en": "Crack Sealing", "unit": "m",  "thb": null,   "page": 94,
+                      "note": "Manual gives no fixed per-unit figure (material depends on crack width/depth). Set a district rate here." }
+  },
+
+  "damage_to_repair_mapping": {
+    "_comment": "Maps a detected damage class (+ severity) to the repair method used to cost it. PROPOSED — confirm with an engineer/advisor before relying on it.",
+    "pothole":              { "low": "skin_patching", "medium": "skin_patching", "high": "deep_patching" },
+    "alligator crack":      { "low": "skin_patching", "medium": "skin_patching", "high": "deep_patching" },
+    "longitudinal crack":   { "low": "fog_seal",      "medium": "fog_seal",      "high": "chip_seal" },
+    "transverse crack":     { "low": "fog_seal",      "medium": "fog_seal",      "high": "chip_seal" },
+    "surface damage":       { "low": "fog_seal",      "medium": "chip_seal",     "high": "skin_patching" },
+    "default":              { "low": "fog_seal",      "medium": "skin_patching", "high": "deep_patching" }
+  },
+
+  "component_rates": {
+    "_comment": "Underlying unit rates from the same manual, kept for transparency / re-computation.",
+    "materials_thb": {
+      "crushed_rock_m3": 322,   "premix_stone_m3": 307,  "single_size_stone_half_inch_m3": 255,
+      "asphalt_CRS2_litre": 10.10, "asphalt_CMS2h_litre": 11.12, "asphalt_CSS1_litre": 11.33,
+      "plastic_paint_gallon": 350, "oil_paint_gallon": 600, "reflective_paint_gallon": 2500
+    },
+    "labour_thb_per_person_per_day": { "temporary_wage": 201.75, "official_allowance": 108 },
+    "machinery_thb_per_hour": {
+      "asphalt_kettle_sprayer": 89.12, "air_compressor": 362.52, "truck": 453.72, "truck_6t": 796.58,
+      "roller": 287.96, "concrete_cutter": 131.59, "plate_compactor": 27.78, "wheel_excavator": 433,
+      "water_truck": 804.34, "grass_cutter": 50
+    },
+    "productivity_per_day": {
+      "crack_sealing_m": 400, "fog_seal_m2": 200, "chip_seal_m2": 200,
+      "skin_patching_m2": 140, "deep_patching_m2": 40
+    }
+  },
+
+  "other_reference_rates": {
+    "grass_cutting_m2": 0.76,
+    "bridge_clean_paint_m": 318.2,
+    "km_post_painting_each": 139.8,
+    "curve_marker_painting_each": 22.5
+  }
+}

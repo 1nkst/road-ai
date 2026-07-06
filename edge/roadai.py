@@ -11,7 +11,9 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-import gps_reader  # local NEO-6M reader; safe to import even without pyserial
+import gps_reader   # local NEO-6M reader; safe to import even without pyserial
+import measurement  # pixel->cm area via camera calibration (homography)
+import cost         # deterministic repair-cost estimate from the DRR manual rates
 
 # onnxruntime is optional — only needed for the local ONNX backend. The Jetson
 # edge unit uses the Ultralytics backend instead, so don't hard-require it.
@@ -395,31 +397,31 @@ def calculate_metrics(pred_bbox=None, pred_seg=None):
 
     if pred_seg and "points" in pred_seg:
         points = np.array([[p["x"], p["y"]] for p in pred_seg["points"]], dtype=np.float32)
-        area   = float(cv2.contourArea(points))
         x, y, w, h = cv2.boundingRect(points.astype(np.int32))
-        area_cm2 = round(area / (PX_PER_CM_W * PX_PER_CM_H), 2)
-        area_m2  = round(area_cm2 / 10000, 4)
+        # Real-world area: uses the camera homography when calibrated, otherwise
+        # falls back to the fixed PX_PER_CM scale (non-breaking).
+        area_m2  = measurement.polygon_area_m2(pred_seg["points"], PX_PER_CM_W, PX_PER_CM_H)
         metrics["seg_width_cm"]  = round(w / PX_PER_CM_W, 2)
         metrics["seg_height_cm"] = round(h / PX_PER_CM_H, 2)
-        metrics["seg_area_cm2"]  = area_cm2
         metrics["seg_area_m2"]   = area_m2
+        metrics["seg_area_cm2"]  = round(area_m2 * 10000, 2)
+        metrics["measured_by"]   = "homography" if measurement.is_calibrated() else "fixed_scale"
 
     return metrics
 
 
 def estimate_cost(detection):
-    """Estimate repair cost in THB based on damage class and area."""
-    cls      = detection.get("class", "")
-    area_m2  = detection.get("seg_area_m2", None)
+    """Estimate repair cost in THB using the official DRR manual rates.
+    Returns cost + the repair method and manual source for traceability."""
+    cls     = detection.get("class", "")
+    sev     = detection.get("severity", "medium")
+    area_m2 = detection.get("seg_area_m2", None)
+    if area_m2 is None:                         # no mask -> approximate from bbox
+        area_m2 = detection.get("bbox_area_cm2", 0) / 10000
 
-    if area_m2 is None:
-        # Fall back to bbox area
-        area_cm2 = detection.get("bbox_area_cm2", 0)
-        area_m2  = area_cm2 / 10000
-
-    cost_per_m2 = get_cost_per_m2(cls)
-    total_cost  = round(area_m2 * cost_per_m2)
-    return {"cost_thb": total_cost, "cost_per_m2": cost_per_m2, "area_m2": round(area_m2, 4)}
+    result = cost.estimate_repair_cost(cls, sev, area_m2)
+    result["area_m2"] = round(float(area_m2 or 0), 4)
+    return result
 
 
 def severity(detection):

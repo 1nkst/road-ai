@@ -1,0 +1,413 @@
+================================================================================
+ ROAD AI — FULL SYSTEM OVERVIEW & CHANGE LOG
+ AI-powered road damage detection for Thai road maintenance
+ Last updated: 2026-06-25
+================================================================================
+
+This document describes the COMPLETE current state of the ROAD AI system:
+how it works end-to-end, the hardware, the software, every change/fix made,
+and how to run it yourself without assistance.
+
+
+================================================================================
+ 1. WHAT THE SYSTEM DOES
+================================================================================
+
+ROAD AI is an edge device that:
+  - Captures top-down images of the road surface from a camera
+  - Detects road damage (potholes, longitudinal/transverse/alligator cracks)
+    using an AI segmentation model
+  - Measures the damaged area (m²) from the segmentation mask
+  - Tags each detection with a GPS coordinate (NEO-6M module)
+  - Pins the damage on a live map, builds a survey path, and records history
+  - Serves a web dashboard (Thai/English) that any phone or laptop can open
+
+IMPORTANT — CAMERA PERSPECTIVE:
+  The production camera looks STRAIGHT DOWN at the road surface (top-down,
+  close-up asphalt). This is NOT a forward/dashcam view. The detection model
+  must be trained on this same top-down perspective. Dashcam-trained models
+  (e.g. the public RDD2022 model) do NOT work here — they see nothing on flat
+  top-down asphalt. This drove several decisions below.
+
+
+================================================================================
+ 2. CURRENT ARCHITECTURE (ALL-IN-ONE JETSON EDGE UNIT)
+================================================================================
+
+  ┌──────────────────── JETSON NANO (the edge unit) ────────────────────┐
+  │                                                                      │
+  │   USB Webcam ──┐                                                     │
+  │   NEO-6M GPS ──┼──►  roadai.py  (runs as a systemd service,          │
+  │   (UART)       │       auto-starts on boot)                          │
+  │                │        ├─ capture frames (OpenCV, V4L2 backend)     │
+  │                │        ├─ send each frame to Roboflow SERVERLESS    │
+  │                │        │    cloud → YOUR segmentation model         │
+  │                │        ├─ read GPS locally from /dev/ttyTHS1        │
+  │                │        ├─ save ONLY frames that contain damage      │
+  │                │        └─ serve dashboard + MJPEG stream on :5000   │
+  │                                                                      │
+  └───────────────────────────────┬──────────────────────────────────────┘
+                                  │  Wi-Fi (home / school / phone hotspot)
+                                  ▼
+             Any phone / tablet / laptop browser
+             → opens index.html → connects to http://nano.local:5000
+
+Key point: the Jetson does EVERYTHING (camera + GPS + inference request +
+dashboard). Inference itself runs in the Roboflow cloud (serverless), so the
+Jetson only needs an internet connection. No laptop, no Docker, no local model
+file is required for normal operation.
+
+
+================================================================================
+ 3. HARDWARE
+================================================================================
+
+DEVICE:      NVIDIA Jetson Nano B01, 4 GB
+OS IMAGE:    Qengineering "Jetson-Nano-Ubuntu-20-image"
+             - Ubuntu 20.04, Python 3.8, CUDA 10.2
+             - Pre-installed: PyTorch 1.13, torchvision 0.14,
+               OpenCV 4.8 (CUDA-enabled), TensorRT 8.0.1, TensorFlow 2.4
+             - Default login: user "jetson" / password "jetson"
+SD CARD:     64 GB (root partition expanded to ~58 GB)
+SWAP:        4 GB swapfile added (on top of the image's zram) -> ~6 GB total
+POWER MODE:  MAXN (max performance) via nvpmodel -m 0 + jetson_clocks
+WIFI:        Intel Wireless-AC 8265 (M.2 card, installed by user)
+CAMERA:      USB webcam ("Full HD webcam"), enumerates as /dev/video0
+GPS:         u-blox NEO-6M (GY-GPS6MV2 board) with patch antenna
+
+GPS WIRING (NEO-6M -> Jetson 40-pin header):
+  GPS VCC -> Pin 4  (5V)
+  GPS GND -> Pin 6  (GND)      <-- this ground wire was the fix; see section 7
+  GPS TX  -> Pin 10 (UART RXD)
+  GPS RX  -> Pin 8  (UART TXD)  (optional, only needed to send commands)
+  UART device on the Jetson = /dev/ttyTHS1  (NOT /dev/ttyAMA0 like a Pi)
+
+
+================================================================================
+ 4. SOFTWARE COMPONENTS
+================================================================================
+
+ON THE JETSON  (/home/jetson/roadai/):
+  edge/roadai.py      - main backend (Flask server, capture, inference, GPS,
+                        events, dashboard endpoints)
+  edge/gps_reader.py  - background NMEA reader for the NEO-6M
+  edge/.env           - Jetson configuration (see section 5)
+  models/             - (best.pt / best.onnx present but UNUSED in serverless mode)
+  /etc/systemd/system/roadai.service  - auto-start service (see section 6)
+
+ON THE LAPTOP  (C:\Users\1nk\Desktop\road-ai\):
+  index.html               - the web dashboard (opened in a browser)
+  presentation.html        - standalone slide-mockup builder (NOT part of the
+                             real app; for screenshots only — see section 9)
+  edge/roadai.py           - same backend (also runnable on the laptop)
+  edge/gps_reader.py       - GPS reader module
+  edge/.env                - laptop configuration
+  pi_side/                 - OLD Raspberry Pi capture scripts (legacy, unused now)
+  models/best.pt, best.onnx- old self-trained model (kept for reference, has
+                             corrupted class names — see section 7)
+
+INFERENCE BACKENDS (roadai.py supports three, chosen by .env flags):
+  1. Ultralytics (.pt on local GPU)  -> when USE_ULTRA=1
+  2. Roboflow API (Docker OR serverless) -> default
+  3. Local ONNX runtime              -> when USE_ONNX=1
+  Priority order in code: Ultralytics -> Roboflow -> ONNX.
+  CURRENT PRODUCTION SETTING: Roboflow serverless (USE_ULTRA=0, USE_ONNX=0).
+
+
+================================================================================
+ 5. CONFIGURATION (.env FILES)
+================================================================================
+
+JETSON  (/home/jetson/roadai/edge/.env):
+  ROBOFLOW_API_KEY=T4zuK4T4cMUowqMPvSVl
+  ROBOFLOW_WORKSPACE=cheemo
+  ROBOFLOW_WORKFLOW_ID=custom-workflow-2
+  ROBOFLOW_API_URL=https://serverless.roboflow.com   <- cloud inference
+  FRAME_SOURCE=local            <- use the Jetson's own USB camera
+  CAMERA_INDEX=0
+  USE_ULTRA=0                   <- do NOT use the local RDD/.pt model
+  USE_ONNX=0                    <- do NOT use local ONNX
+  MIN_CONFIDENCE=0.40           <- ignore detections weaker than 40%
+  USE_LOCAL_GPS=1               <- read GPS from this machine's UART
+  GPS_PORT=/dev/ttyTHS1
+
+LAPTOP  (C:\Users\1nk\Desktop\road-ai\edge\.env):
+  ROBOFLOW_API_KEY / WORKSPACE / WORKFLOW_ID  (same as above)
+  ROBOFLOW_API_URL=...          (localhost:9001 for local Docker, or serverless)
+  CAMERA_INDEX=3
+  FRAME_SOURCE=remote
+  USE_ONNX=0
+
+.env FLAG REFERENCE (added/changed this project):
+  FRAME_SOURCE   "local"  = capture from this machine's camera
+                 "remote" = receive frames pushed to POST /upload (legacy Pi)
+  USE_ULTRA      1 = run a local YOLO .pt on the GPU via ultralytics
+  USE_ONNX       1 = run a local ONNX model via onnxruntime
+  USE_LOCAL_GPS  1 = read a NEO-6M wired to this machine's UART
+  GPS_PORT       serial device for the GPS (/dev/ttyTHS1 Jetson, /dev/ttyAMA0 Pi)
+  MIN_CONFIDENCE confidence gate for recording a damage event
+
+
+================================================================================
+ 6. THE AUTO-START SERVICE (systemd)
+================================================================================
+
+roadai.py runs as a systemd service, so it starts automatically on every boot
+and restarts itself if it ever crashes. You NEVER have to run roadai.py by hand.
+
+File: /etc/systemd/system/roadai.service
+  [Unit]
+  Description=ROAD AI edge unit (camera + serverless inference + dashboard)
+  After=network-online.target
+  Wants=network-online.target
+  [Service]
+  Type=simple
+  User=jetson
+  WorkingDirectory=/home/jetson/roadai/edge
+  Environment=MPLBACKEND=Agg
+  ExecStart=/usr/bin/python3 -u /home/jetson/roadai/edge/roadai.py
+  Restart=on-failure
+  RestartSec=5
+  [Install]
+  WantedBy=multi-user.target
+
+Managing the service (only needed if something is stuck):
+  sudo systemctl status roadai      # is it running?
+  sudo systemctl restart roadai     # restart (e.g. after deploying new code)
+  sudo systemctl stop roadai        # stop
+  journalctl -u roadai -f           # live logs
+NOTE: logs now go to journald (journalctl), not a server.log file.
+
+
+================================================================================
+ 7. NETWORKING & HEADLESS ACCESS
+================================================================================
+
+The Jetson has NO monitor. It is reached over the network by NAME:
+
+  ssh jetson@nano.local             # shell access (passwordless key set up)
+  http://nano.local:5000            # the dashboard / API
+  http://nano.local:5000/video_feed # raw live camera feed (quick "is it alive")
+
+"nano.local" works thanks to mDNS (avahi-daemon installed + enabled on the
+Jetson). It resolves ONLY when your laptop/phone is on the SAME network as the
+Jetson. If it ever fails to resolve (some phones/networks block mDNS), use the
+raw IP instead (find it once via the router, or `ip addr show wlan0`).
+
+SAVED WIFI NETWORKS (Jetson auto-joins any in range, no monitor needed):
+  - Home Wi-Fi
+  - School Wi-Fi
+  - Phone hotspot "1nk"  (autoconnect priority 10 = preferred when on)
+Because the hotspot has priority 10, whenever "1nk" is on the Jetson hops to it;
+turn the hotspot off and it falls back to home/school Wi-Fi.
+
+FIELD USE (no Wi-Fi around):
+  1. Turn on phone hotspot "1nk" (phone needs mobile data for cloud inference)
+  2. Power on the Jetson -> it auto-joins "1nk" within ~20s
+  3. Join your laptop/phone to "1nk" too
+  4. Open the dashboard at http://nano.local:5000
+
+DHCP note: the Jetson's raw IP changes per network (home was 192.168.1.169,
+school 192.168.1.161). This is exactly why we use nano.local instead.
+
+
+================================================================================
+ 8. HOW TO RUN IT (NO ASSISTANCE NEEDED)
+================================================================================
+
+NORMAL USE — three steps, no terminal, no scripts:
+  1. Power on the Jetson. Wait ~40 seconds. The roadai service auto-starts
+     (camera + inference + dashboard) and the Jetson auto-joins Wi-Fi.
+  2. Put your laptop/phone on the SAME Wi-Fi (or the "1nk" hotspot).
+  3. Open index.html in a browser. It auto-fills http://nano.local:5000.
+     Click "Connect".
+
+That's it. Point the camera at the road and it detects + maps damage.
+
+THREE THINGS TO REMEMBER:
+  - NEEDS INTERNET: inference runs in the Roboflow cloud, so the Wi-Fi/hotspot
+    must have working internet.
+  - GPS NEEDS SKY: no satellite fix indoors; the map coordinates only appear
+    when the antenna can see the sky (LED blinks once it locks on).
+  - SAME NETWORK: nano.local only resolves when your device and the Jetson are
+    on the same Wi-Fi/hotspot.
+
+QUICK HEALTH CHECK:
+  Open http://nano.local:5000/video_feed — if you see the camera image,
+  everything is running.
+
+IF SOMETHING IS STUCK (rare):
+  ssh jetson@nano.local
+  sudo systemctl restart roadai
+
+
+================================================================================
+ 9. THE DASHBOARD (index.html)
+================================================================================
+
+Three tabs, all connect to the Jetson at nano.local:5000:
+  - SURVEY MAP:  live GPS location (pulsing dot), damage pins coloured by
+                 severity, survey path, start/end markers, legend.
+  - LIVE DETECTION: MJPEG camera feed with overlaid detections, AUTO/MANUAL
+                 modes, sidebar metrics (bbox/mask size, area, severity,
+                 confidence), detection log.
+  - DAMAGE HISTORY: grid of captured damage photos with filters; click a card
+                 for a detail modal.
+
+DASHBOARD FEATURES ADDED THIS PROJECT:
+  - LANGUAGE SWITCH (Thai <-> English), DEFAULT THAI. Button "🌐" in the header.
+    Choice is remembered across reloads. Entire UI is translated.
+  - NO REPAIR COST anywhere. Cost estimates were removed on purpose (they can't
+    be estimated reliably without official technical/costing documentation).
+  - DEVICE CONNECTION by name: defaults to http://nano.local:5000. The device
+    box has a dropdown with nano.local, the known IPs, and any device you've
+    connected to before (remembered automatically).
+  - START SURVEY: free-text road name input + "Use Live GPS" button that fills
+    coordinates from the NEO-6M + preset Chiang Mai roads.
+  - LIVE DISTANCE: survey distance is computed continuously from the GPS track.
+
+STANDALONE MOCKUP (presentation.html):
+  A SEPARATE file used ONLY to build screenshots for presentation slides. It
+  connects to nothing and is not referenced by the real app (safe to delete).
+  It reuses the exact dashboard styling so screenshots match the real UI.
+  Editor drawer lets you:
+    - Drop custom damage pins by clicking the map (type/severity/confidence/
+      area/photo per pin)
+    - Draw a survey path, set start/end flags
+    - Upload custom damage photos and a custom live-camera image
+    - RANDOMIZE mode: place pins with random class (from a chosen set),
+      severity, confidence and area within min/max ranges you set
+    - "Preview" button hides all editor chrome for clean screenshots
+    - "Reset" restores sample data
+  Map markers were made pixel-identical to the real app (severity-coloured
+  dots, ▶/■ start/end discs, blue path with black casing, correct z-order).
+
+
+================================================================================
+ 10. DETAILED CHANGE / FIX LOG (EVERYTHING WE DID)
+================================================================================
+
+INFERENCE BACKEND
+  - Added a USE_ONNX flag. BUG FIXED: a local best.onnx on disk was being
+    loaded automatically and silently overriding the good Roboflow model,
+    which made detection label cracks as potholes. Now the ONNX backend only
+    loads when USE_ONNX=1.
+  - Made "import onnxruntime" optional (the Jetson doesn't have it installed);
+    it no longer crashes when the package is missing.
+  - Added a full Ultralytics (.pt on GPU) backend + USE_ULTRA flag, and a
+    dispatcher with priority Ultralytics -> Roboflow -> ONNX.
+  - Set the Jetson to Roboflow SERVERLESS (https://serverless.roboflow.com) so
+    the user's own top-down segmentation model runs on the edge unit with only
+    Wi-Fi needed (no Docker, no local model).
+
+MODEL INVESTIGATION
+  - Discovered the self-exported best.pt / best.onnx have CORRUPTED class names
+    ("------------------------------" and "ROAD AI - v11 2025-12-17 8-58pm")
+    instead of real damage classes — the root cause of earlier bad labels.
+  - Trained/downloaded a public RDD2022 dashcam model (YOLOv8_Small_RDD.pt,
+    correct 4 classes) and ran it on the Jetson GPU (~10 FPS). It detected
+    NOTHING on the user's top-down road images because it was trained on
+    forward/dashcam views. Conclusion: dashcam models don't fit this project;
+    the user's own top-down Roboflow model (serverless) is the right one.
+    The RDD model file was later deleted to save space.
+
+DATA / EVENTS
+  - Live survey distance now computed continuously from the GPS track (updates
+    while a survey is active, not only at the end).
+  - Saved damage-frame filenames are now self-describing:
+      <time>-<longitude>-<latitude>-<damagetype>-conf<NN>-id<eid>.jpg
+    e.g. 20260617_143012-99.015567-18.757548-pothole-conf86-id42.jpg
+    ("nofix" is written when there is no GPS lock). Only frames WITH damage
+    are ever written to disk.
+
+JETSON BRING-UP
+  - Flashed the Qengineering Ubuntu 20.04 image; expanded the root partition to
+    ~58 GB; added a 4 GB swapfile; set MAXN power mode.
+  - Installed the Intel AC8265 Wi-Fi card.
+  - Set up passwordless SSH from the laptop (ed25519 key).
+  - Verified the GPU stack: PyTorch CUDA available = True (Tegra X1),
+    OpenCV CUDA = 1 device, TensorRT present.
+  - Installed ultralytics + its deps WITHOUT breaking the pre-built PyTorch/
+    torchvision/OpenCV (used --no-deps + a careful numpy 1.24 upgrade).
+  - Installed the Flask stack (flask, flask-cors, python-dotenv, requests,
+    pynmea2, pyserial).
+
+CAMERA
+  - BUG FIXED: the default OpenCV GStreamer backend failed on the USB webcam
+    ("Internal data stream error"). camera_worker now forces the V4L2 backend
+    + MJPG on Linux (and keeps the default backend on Windows), with retry
+    handling. Camera opens reliably as /dev/video0.
+
+GPS
+  - Added edge/gps_reader.py (configurable GPS_PORT via env; safe to import even
+    without pyserial). roadai.py starts it when USE_LOCAL_GPS=1 and tags every
+    camera frame with the live fix.
+  - Prepared the Jetson UART: disabled nvgetty (freed /dev/ttyTHS1), added the
+    jetson user to the dialout group, rebooted.
+  - BUG FIXED (cost real debugging time): the GPS port opened but received 0
+    bytes. Root cause was a MISSING GROUND WIRE. After wiring GPS GND -> Pin 6,
+    NMEA data flowed. (Note: indoors the module sends data but reports no fix
+    until the antenna sees the sky.)
+
+DASHBOARD (index.html)
+  - Removed all repair-cost UI and logic (session bar, sidebar, history cards,
+    map popups, KPIs, gallery, detail modal, cost sort option).
+  - Added a full Thai/English i18n system (default Thai) with a header toggle;
+    language remembered in localStorage.
+  - Device connection defaults to nano.local; added a remembered-device dropdown
+    (mDNS name + known IPs + auto-saved recents).
+  - (Earlier) live GPS location marker, custom road-name input, "Use Live GPS".
+
+PRESENTATION MOCKUP (presentation.html)
+  - Built a standalone slide-builder (custom pins, damages, photos, path,
+    start/end, randomize mode, preview/hide-editor, reset).
+  - FIXED: pin numbers kept increasing and didn't reset -> now reset cleanly.
+  - MATCHED the real app graphically: damage pins = severity-coloured dots,
+    start/end = ▶/■ discs, path = blue line with black casing.
+  - FIXED z-order: damage dots now render on top of the survey path line.
+
+NETWORKING / HEADLESS
+  - Installed + enabled avahi-daemon so the Jetson is reachable as nano.local
+    (no more hunting the DHCP IP).
+  - Confirmed the Jetson auto-reconnects to saved Wi-Fi on boot with no monitor.
+  - Added the phone hotspot "1nk" as a saved network (autoconnect, priority 10).
+
+CLEANUP
+  - Made roadai.py auto-start via the systemd service (see section 6).
+  - Freed ~111 MB on the laptop (removed test artifacts, old received_frames,
+    and the unused RDD model). Kept best.pt/best.onnx for reference.
+
+
+================================================================================
+ 11. KNOWN LIMITATIONS
+================================================================================
+
+  - Inference requires INTERNET (Roboflow serverless). No signal = no detection.
+    A future offline option would need the user's own model exported correctly
+    (the current local export has corrupted class names) or Roboflow's Jetson
+    inference container.
+  - Cloud round-trip adds ~1-2 s latency per detection vs. a local model.
+  - AREA -> real-world size is approximate. The PX_PER_CM calibration constants
+    are estimates. Accurate measurement needs a dataset captured with the real
+    production camera at a fixed, known height/angle (the "plan D" below).
+  - Data is IN-MEMORY on the Jetson: surveys/events are lost on reboot (no
+    database yet).
+  - nano.local requires laptop + Jetson on the same network.
+
+
+================================================================================
+ 12. PENDING / NEXT STEPS
+================================================================================
+
+  - Field trial on real Chiang Mai roads.
+  - SQLite persistence so surveys survive a reboot.
+  - Form 1 PDF generation (Thai government repair-request document).
+  - "Plan D": capture a proper dataset with the real production camera at a
+    fixed height/angle, retrain the segmentation model with correct classes,
+    and calibrate PX_PER_CM for real-life-accurate area/measurements.
+  - Optional: run the model locally on the Jetson (offline) once it is
+    re-exported from Roboflow with correct class names.
+
+================================================================================
+ END OF DOCUMENT
+================================================================================

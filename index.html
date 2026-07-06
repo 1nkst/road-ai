@@ -346,9 +346,10 @@
     </div>
     <div class="device-wrap">
       <span class="device-label" data-i18n="deviceLabel">อุปกรณ์:</span>
-      <input class="device-input" id="deviceUrl" list="ipList" value="http://192.168.1.161:5000" placeholder="http://192.168.x.x:5000"/>
+      <input class="device-input" id="deviceUrl" list="ipList" value="http://nano.local:5000" placeholder="http://nano.local:5000"/>
       <datalist id="ipList">
-        <option value="http://192.168.1.161:5000">Jetson edge unit</option>
+        <option value="http://nano.local:5000">Jetson (by name)</option>
+        <option value="http://192.168.1.169:5000">Jetson (home IP)</option>
         <option value="http://localhost:5000">Local</option>
       </datalist>
       <button class="btn btn-primary" onclick="reconnect()" data-i18n="connect">เชื่อมต่อ</button>
@@ -476,10 +477,14 @@
     </div>
 
     <!-- Session summary bar -->
-    <div class="session-bar" style="grid-template-columns:repeat(3,1fr)">
+    <div class="session-bar">
       <div class="session-card">
         <div class="session-val" id="sumTotal">0</div>
         <div class="session-label" data-i18n="totalDetections">จำนวนที่ตรวจพบ</div>
+      </div>
+      <div class="session-card">
+        <div class="session-val warn" id="sumCost">฿0</div>
+        <div class="session-label" data-i18n="estRepairCost">ค่าซ่อมประเมิน</div>
       </div>
       <div class="session-card">
         <div class="session-val" id="sumArea">0 m²</div>
@@ -532,6 +537,8 @@
         <div class="metric-block-title">▸ <span data-i18n="assessment">การประเมิน</span></div>
         <div class="metric-row"><span class="metric-key" data-i18n="severity">ความรุนแรง</span><span class="metric-val" id="curSeverity">—</span></div>
         <div class="metric-row"><span class="metric-key" data-i18n="damageType">ประเภทความเสียหาย</span><span class="metric-val" id="curClass">—</span></div>
+        <div class="metric-row"><span class="metric-key" data-i18n="repairMethod">วิธีซ่อม</span><span class="metric-val" id="curMethod">—</span></div>
+        <div class="metric-row"><span class="metric-key" data-i18n="estCost">ค่าซ่อมประเมิน</span><span class="metric-val accent" id="curCost">—</span></div>
       </div>
     </div>
 
@@ -596,6 +603,7 @@
       <select class="filter-select" id="sortBy" onchange="renderHistory()">
         <option value="time_desc" data-i18n="newestFirst">ใหม่สุดก่อน</option>
         <option value="time_asc" data-i18n="oldestFirst">เก่าสุดก่อน</option>
+        <option value="cost_desc" data-i18n="costSort">ค่าซ่อม (สูง→ต่ำ)</option>
         <option value="area_desc" data-i18n="areaSort">พื้นที่ (มาก→น้อย)</option>
         <option value="sev_desc" data-i18n="sevSort">ความรุนแรง (สูง→ต่ำ)</option>
       </select>
@@ -630,7 +638,10 @@
         <div class="modal-row"><span class="modal-key" data-i18n="source">แหล่งที่มา</span><span class="modal-val" id="mdSource">—</span></div>
         <div class="modal-row"><span class="modal-key" data-i18n="confidence">ความเชื่อมั่น</span><span class="modal-val accent" id="mdConf">—</span></div>
         <div class="modal-row"><span class="modal-key" data-i18n="damagedArea">พื้นที่ความเสียหาย</span><span class="modal-val" id="mdArea">—</span></div>
+        <div class="modal-row"><span class="modal-key" data-i18n="repairMethod">วิธีซ่อม</span><span class="modal-val" id="mdMethod">—</span></div>
+        <div class="modal-row"><span class="modal-key" data-i18n="estCost">ค่าซ่อมประเมิน</span><span class="modal-val accent" id="mdCost">—</span></div>
         <div class="modal-row"><span class="modal-key" data-i18n="captured">บันทึกเมื่อ</span><span class="modal-val" id="mdTime">—</span></div>
+        <div id="mdSource" style="font-family:'Space Mono',monospace;font-size:.52rem;color:var(--muted);margin-top:8px;line-height:1.5"></div>
 
         <div id="mdDetections"></div>
       </div>
@@ -738,7 +749,8 @@ const I18N = {
     totalDamage:'ความเสียหายทั้งหมด', damageTypes:'ประเภทความเสียหาย', damageByType:'ความเสียหายตามประเภท — แตะเพื่อดูภาพ',
     noMatchFilters:'ไม่มีความเสียหายที่ตรงกับตัวกรอง', detections:'การตรวจจับ',
     videoManual:'// กล้อง — โหมดถ่ายด้วยมือ', videoRealtime:'// กล้อง — ตรวจจับแบบเรียลไทม์',
-    statusDemo:'โหมดสาธิต — ไม่มีอุปกรณ์', statusConnecting:'กำลังเชื่อมต่อ...', sessionCleared:'ล้างเซสชันแล้ว กำลังรอ...'
+    statusDemo:'โหมดสาธิต — ไม่มีอุปกรณ์', statusConnecting:'กำลังเชื่อมต่อ...', sessionCleared:'ล้างเซสชันแล้ว กำลังรอ...',
+    estRepairCost:'ค่าซ่อมประเมิน', estCost:'ค่าซ่อมประเมิน', repairMethod:'วิธีซ่อม', perManual:'อ้างอิงคู่มือ ทช.', costSort:'ค่าซ่อม (สูง→ต่ำ)'
   },
   en:{
     deviceLabel:'Device:', connect:'Connect', newSession:'↺ New Session',
@@ -767,7 +779,8 @@ const I18N = {
     totalDamage:'Total damage', damageTypes:'Damage types', damageByType:'Damage by type — tap to view photos',
     noMatchFilters:'No damage matches these filters.', detections:'Detections',
     videoManual:'// CAMERA FEED — MANUAL CAPTURE MODE', videoRealtime:'// CAMERA FEED — REAL-TIME INFERENCE',
-    statusDemo:'DEMO MODE — NO DEVICE', statusConnecting:'CONNECTING...', sessionCleared:'Session cleared. Waiting...'
+    statusDemo:'DEMO MODE — NO DEVICE', statusConnecting:'CONNECTING...', sessionCleared:'Session cleared. Waiting...',
+    estRepairCost:'Est. Repair Cost', estCost:'Est. Cost', repairMethod:'Repair Method', perManual:'Per DRR manual', costSort:'Cost (high→low)'
   }
 };
 let LANG = localStorage.getItem('roadai_lang') || 'th';
@@ -809,7 +822,7 @@ setInterval(()=>{
 },1000);
 
 // ── Connection state ───────────────────────────────────────
-let deviceUrl   = localStorage.getItem('roadai_device') || 'http://192.168.1.161:5000';
+let deviceUrl   = localStorage.getItem('roadai_device') || 'http://nano.local:5000';
 let isConnected = false;
 let confidences = [];
 let demoTimer   = null;
@@ -904,6 +917,8 @@ async function captureDetect(){
       document.getElementById('confBboxBar').style.width=pct+'%';
       document.getElementById('curClass').textContent    = bbox.class||'—';
       document.getElementById('curSeverity').innerHTML   = sevBadge(bbox.severity);
+      document.getElementById('curMethod').textContent   = bbox.repair_method||'—';
+      document.getElementById('curCost').textContent     = bbox.cost_thb!=null?'฿'+bbox.cost_thb.toLocaleString():'—';
       addLogEntry(bbox.class, bbox.confidence, bbox.severity, false);
       confidences.push(bbox.confidence);
     }
@@ -995,7 +1010,9 @@ function rememberDevice(url){
 function renderDeviceList(){
   const dl = document.getElementById('ipList');
   const defaults = [
-    {v:'http://192.168.1.161:5000', label:'Jetson edge unit'},
+    {v:'http://nano.local:5000',    label:'Jetson (by name)'},
+    {v:'http://192.168.1.161:5000', label:'Jetson (school IP)'},
+    {v:'http://192.168.1.169:5000', label:'Jetson (home IP)'},
     {v:'http://localhost:5000',     label:'Local'}
   ];
   const saved = JSON.parse(localStorage.getItem('roadai_devices')||'[]');
@@ -1053,6 +1070,7 @@ async function pollStats(){
 
 function updateSummary(d){
   document.getElementById('sumTotal').textContent = d.total_detections||0;
+  document.getElementById('sumCost').textContent  = '฿'+(d.total_cost_thb||0).toLocaleString();
   document.getElementById('sumArea').textContent  = (d.total_area_m2||0).toFixed(2)+' m²';
   document.getElementById('sumHigh').textContent  = (d.severity_counts&&d.severity_counts.high)||0;
 }
@@ -1081,6 +1099,8 @@ setInterval(async ()=>{
       // Assessment
       document.getElementById('curClass').textContent    = bbox.class||'—';
       document.getElementById('curSeverity').innerHTML   = sevBadge(bbox.severity);
+      document.getElementById('curMethod').textContent   = bbox.repair_method||'—';
+      document.getElementById('curCost').textContent     = bbox.cost_thb!=null?'฿'+bbox.cost_thb.toLocaleString():'—';
       addLogEntry(bbox.class, bbox.confidence, bbox.severity, false);
     }
 
@@ -1155,7 +1175,8 @@ function startDemo(){
       document.getElementById('confBboxBar').style.width=pct+'%';
       document.getElementById('curClass').textContent   =bbox.class;
       document.getElementById('curSeverity').innerHTML  =sevBadge(bbox.severity);
-      demoTotal++;
+      document.getElementById('curCost').textContent    ='฿'+(bbox.cost_thb||0).toLocaleString();
+      demoTotal++; demoCost+=(bbox.cost_thb||0);
       if(bbox.severity==='high') demoHigh++;
       addLogEntry(bbox.class,bbox.confidence,bbox.severity,true);
     }
@@ -1168,6 +1189,7 @@ function startDemo(){
       document.getElementById('confSegBar').style.width=pct+'%';
     }
     document.getElementById('sumTotal').textContent=demoTotal;
+    document.getElementById('sumCost').textContent ='฿'+demoCost.toLocaleString();
     document.getElementById('sumHigh').textContent =demoHigh;
     confidences.push(d.confidence);
     if(confidences.length>50) confidences=confidences.slice(-50);
@@ -1324,6 +1346,7 @@ function renderSessions(){
       <div class="pin-pop-title">${s.name}</div>
       <div class="pin-pop-row">${tr('damageFound')}: <strong>${s.total_damage}</strong></div>
       <div class="pin-pop-row">${tr('distance')}: <strong>${(s.distance_km||0).toFixed(2)} km</strong></div>
+      <div class="pin-pop-row">${tr('estRepairCost')}: <strong>฿${(s.total_cost||0).toLocaleString()}</strong></div>
       <div class="pin-pop-row">${t}</div>
       <button class="pin-pop-btn" onclick="openSession(${s.id})">${tr('viewSession')} →</button>`;
 
@@ -1360,6 +1383,7 @@ function renderSessions(){
       dot.bindPopup(`
         <div class="pin-pop-title">${d.class}</div>
         <div class="pin-pop-row">${tr('severity')}: <strong style="color:${c}">${tr('sev_'+(d.severity||'low'))}</strong></div>
+        <div class="pin-pop-row">${tr('estCost')}: <strong>฿${(d.cost_thb||0).toLocaleString()}</strong></div>
         <div class="pin-pop-row">${tr('confidence')}: <strong>${((d.confidence||0)*100).toFixed(0)}%</strong></div>
         <button class="pin-pop-btn" onclick="openSession(${s.id})">${tr('viewSurvey')} →</button>`);
       sessionMarkers.push(dot); allLatLngs.push([d.lat, d.lng]);
@@ -1480,7 +1504,8 @@ function openEndSurvey(){
   const sum = document.getElementById('endSummary');
   if(s){
     sum.innerHTML = `${tr('roadName')}: <strong style="color:var(--text)">${s.name}</strong><br/>`+
-                    `${tr('damageFound')}: <strong style="color:var(--accent)">${s.total_damage}</strong>`;
+                    `${tr('damageFound')}: <strong style="color:var(--accent)">${s.total_damage}</strong><br/>`+
+                    `${tr('estRepairCost')}: <strong style="color:var(--accent)">฿${(s.total_cost||0).toLocaleString()}</strong>`;
   }
   document.getElementById('endDistance').value='';
   document.getElementById('endModal').classList.add('visible');
@@ -1567,6 +1592,7 @@ function renderSessionDetail(s){
     </div>
     <div class="sess-kpis">
       <div class="kpi"><div class="kpi-num">${s.total_damage||0}</div><div class="kpi-label">${tr('totalDamage')}</div></div>
+      <div class="kpi"><div class="kpi-num">฿${(s.total_cost||0).toLocaleString()}</div><div class="kpi-label">${tr('estRepairCost')}</div></div>
       <div class="kpi"><div class="kpi-num neutral">${(s.total_area_m2||0).toFixed(3)} m²</div><div class="kpi-label">${tr('damagedArea')}</div></div>
       <div class="kpi"><div class="kpi-num neutral">${Object.keys(summary).length}</div><div class="kpi-label">${tr('damageTypes')}</div></div>
     </div>
@@ -1609,6 +1635,7 @@ async function openGallery(sessionId, type){
       <div class="gal-body">
         <div class="gal-card-title">${e.class} ${sevBadge(e.severity)}</div>
         <div class="gal-row"><span>${tr('area')}</span><strong>${(e.area_m2!=null?e.area_m2.toFixed(4):'—')} m²</strong></div>
+        <div class="gal-row"><span>${tr('estCost')}</span><strong>฿${(e.cost_thb||0).toLocaleString()}</strong></div>
         <div class="gal-row"><span>${tr('confidence')}</span><strong>${((e.confidence||0)*100).toFixed(0)}%</strong></div>
         <div class="gal-row"><span>${tr('captured')}</span><span>${t}</span></div>
       </div>
@@ -1755,6 +1782,7 @@ function renderHistory(){
   items.sort((a,b)=>{
     switch(sort){
       case 'time_asc':  return a.timestamp-b.timestamp;
+      case 'cost_desc': return (b.cost_thb||0)-(a.cost_thb||0);
       case 'area_desc': return (b.area_m2||0)-(a.area_m2||0);
       case 'sev_desc':  return (SEV_RANK[b.severity]||0)-(SEV_RANK[a.severity]||0);
       default:          return b.timestamp-a.timestamp; // time_desc
@@ -1771,6 +1799,7 @@ function renderHistory(){
   grid.innerHTML = items.map(e=>{
     const t = new Date(e.timestamp*1000).toLocaleTimeString();
     const area = (e.area_m2!=null? e.area_m2.toFixed(3):'—')+' m²';
+    const cost = e.cost_thb!=null ? '฿'+e.cost_thb.toLocaleString() : '—';
     const thumb = e.thumbnail
       ? `<img src="${e.thumbnail}" alt="${e.class}"/>`
       : `<div class="dmg-thumb-empty">▤</div>`;
@@ -1783,10 +1812,11 @@ function renderHistory(){
         <div class="dmg-body">
           <div class="dmg-class">${e.class}</div>
           <div class="dmg-meta">
-            <span class="dmg-stat"><strong>${area}</strong></span>
+            <span class="dmg-stat"><strong>${cost}</strong></span>
             ${sevBadge(e.severity)}
           </div>
           <div class="dmg-meta" style="margin-top:5px">
+            <span class="dmg-stat">${area}</span>
             <span class="dmg-stat">${(e.confidence*100||0).toFixed(0)}%</span>
           </div>
           <div class="dmg-time">${t}</div>
@@ -1819,6 +1849,10 @@ function renderEventModal(ev){
   document.getElementById('mdSource').textContent   = (ev.source||'').toUpperCase();
   document.getElementById('mdConf').textContent     = ((ev.confidence||0)*100).toFixed(1)+'%';
   document.getElementById('mdArea').textContent     = (ev.area_m2!=null?ev.area_m2.toFixed(4):'—')+' m²';
+  const primary = (ev.detections||[]).find(d=>d.repair_method) || {};
+  document.getElementById('mdMethod').textContent   = primary.repair_method || '—';
+  document.getElementById('mdCost').textContent     = ev.cost_thb!=null?'฿'+ev.cost_thb.toLocaleString():'—';
+  document.getElementById('mdSource').textContent   = primary.cost_source ? (tr('perManual')+': '+primary.cost_source) : '';
   document.getElementById('mdTime').textContent     = new Date(ev.timestamp*1000).toLocaleString();
   document.getElementById('modalImg').src           = ev.thumbnail||'';
 

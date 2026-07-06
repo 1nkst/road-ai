@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RoadAI — Presentation Mockup</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#eef1f6;--surface:#ffffff;--surface2:#f4f6fa;
+      --border:#e3e7ee;--border2:#d0d6e0;
+      --accent:#2563eb;--accent2:#1d4ed8;
+      --text:#1c2430;--muted:#8b94a2;--muted2:#5e6775;
+      --danger:#e0413f;--warn:#d97706;--info:#0ea5e9;
+    }
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;overflow-x:hidden}
+    body::before{
+      content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.12;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    }
+
+    /* ── Header ── */
+    header{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap}
+    .logo{display:flex;align-items:center;gap:10px}
+    .logo-icon{width:32px;height:32px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center}
+    .logo-icon svg{width:18px;height:18px}
+    .logo-text{font-size:1.2rem;font-weight:800;letter-spacing:-.03em}
+    .logo-text span{color:var(--accent)}
+    .header-center{display:flex;align-items:center;gap:10px}
+    .status-pill{display:flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--border);border-radius:999px;font-family:'Space Mono',monospace;font-size:.65rem;color:var(--muted);transition:all .3s}
+    .status-pill.connected{border-color:var(--accent);color:var(--accent)}
+    .status-pill.demo-mode{border-color:var(--warn);color:var(--warn)}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+    .device-wrap{display:flex;align-items:center;gap:6px}
+    .device-label{font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);white-space:nowrap}
+    .device-input{background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:4px 8px;color:var(--text);font-family:'Space Mono',monospace;font-size:.62rem;outline:none;width:170px;transition:border-color .2s}
+    .device-input:focus{border-color:var(--accent)}
+    .btn{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer;border:none;font-family:'Syne',sans-serif;transition:all .2s}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-primary:hover{background:var(--accent2)}
+    .btn-ghost{background:transparent;color:var(--muted2);border:1px solid var(--border2)}
+    .btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+    .btn-danger{background:transparent;color:var(--danger);border:1px solid rgba(255,77,77,.3)}
+    .btn-danger:hover{background:rgba(255,77,77,.1)}
+    .header-time{font-family:'Space Mono',monospace;font-size:.72rem;color:var(--muted)}
+
+    /* ── Layout ── */
+    .layout{display:grid;grid-template-columns:1fr 320px;height:calc(100vh - 57px)}
+
+    /* ── Video panel ── */
+    .video-section{padding:20px 20px 20px 28px;display:flex;flex-direction:column;gap:12px}
+    .video-label{font-size:.65rem;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+    .video-wrapper{position:relative;flex:1;background:#000;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    .video-wrapper img{width:100%;height:100%;object-fit:cover;display:block}
+    .corner{position:absolute;width:18px;height:18px;border-color:var(--accent);border-style:solid;opacity:.7}
+    .corner.tl{top:10px;left:10px;border-width:2px 0 0 2px}
+    .corner.tr{top:10px;right:10px;border-width:2px 2px 0 0}
+    .corner.bl{bottom:10px;left:10px;border-width:0 0 2px 2px}
+    .corner.br{bottom:10px;right:10px;border-width:0 2px 2px 0}
+    .video-badge{position:absolute;bottom:12px;left:12px;background:rgba(0,0,0,.75);border:1px solid var(--border);backdrop-filter:blur(8px);padding:5px 10px;border-radius:6px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--accent);display:flex;align-items:center;gap:7px}
+    .rec-dot{width:5px;height:5px;background:var(--danger);border-radius:50%;animation:pulse 1s ease-in-out infinite}
+
+    /* stream placeholder */
+    .stream-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center}
+    .stream-placeholder-title{font-size:.9rem;font-weight:700;color:var(--warn)}
+    .stream-placeholder-sub{font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);line-height:1.8}
+    .demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;max-width:280px}
+    .demo-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:10px}
+    .demo-card-label{font-size:.55rem;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:3px;text-transform:uppercase}
+    .demo-card-val{font-size:.8rem;font-weight:700;color:var(--accent);font-family:'Space Mono',monospace}
+
+    /* ── Session summary bar (below video) ── */
+    .session-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .session-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+    .session-val{font-size:1.3rem;font-weight:800;color:var(--accent);line-height:1;margin-bottom:3px;font-family:'Space Mono',monospace}
+    .session-val.warn{color:var(--warn)}
+    .session-val.danger{color:var(--danger)}
+    .session-label{font-size:.55rem;font-family:'Space Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+    /* ── Sidebar ── */
+    .sidebar{border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+    .sidebar::-webkit-scrollbar{width:3px}
+    .sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+    .sidebar-section{padding:16px;border-bottom:1px solid var(--border)}
+    .sidebar-title{font-size:.6rem;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px}
+
+    /* stats grid */
+    .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:10px}
+    .stat-value{font-size:1.3rem;font-weight:800;color:var(--accent);line-height:1;margin-bottom:3px}
+    .stat-label{font-size:.55rem;font-family:'Space Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+    /* metric blocks */
+    .metric-block{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:8px}
+    .metric-block:last-child{margin-bottom:0}
+    .metric-block-title{font-size:.58rem;font-family:'Space Mono',monospace;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+    .metric-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)}
+    .metric-row:last-child{border-bottom:none}
+    .metric-key{font-size:.63rem;color:var(--muted)}
+    .metric-val{font-family:'Space Mono',monospace;font-size:.68rem;color:var(--text);font-weight:700}
+    .metric-val.accent{color:var(--accent)}
+    .metric-val.warn{color:var(--warn)}
+    .metric-val.danger{color:var(--danger)}
+
+    /* confidence bars */
+    .conf-item{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+    .conf-item:last-child{margin-bottom:0}
+    .conf-header{display:flex;justify-content:space-between;align-items:center}
+    .conf-name{font-size:.68rem;font-weight:600}
+    .conf-pct{font-family:'Space Mono',monospace;font-size:.63rem;color:var(--accent)}
+    .conf-bar-bg{height:3px;background:var(--border);border-radius:99px;overflow:hidden}
+    .conf-bar-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .5s ease}
+
+    /* severity badge */
+    .sev-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:.58rem;font-weight:700;font-family:'Space Mono',monospace}
+    .sev-low{background:rgba(77,166,255,.15);color:var(--info);border:1px solid rgba(77,166,255,.3)}
+    .sev-medium{background:rgba(245,166,35,.15);color:var(--warn);border:1px solid rgba(245,166,35,.3)}
+    .sev-high{background:rgba(255,77,77,.15);color:var(--danger);border:1px solid rgba(255,77,77,.3)}
+
+    /* log */
+    .log-section{padding:16px;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+    .log-header{display:flex;align-items:center;justify-content:space-between}
+    .log-list{display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1}
+    .log-list::-webkit-scrollbar{width:2px}
+    .log-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+    .log-item{display:flex;align-items:flex-start;gap:8px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:7px;animation:slideIn .25s ease;flex-shrink:0}
+    @keyframes slideIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+    .log-dot{width:7px;height:7px;border-radius:50%;margin-top:3px;flex-shrink:0}
+    .log-dot.pothole{background:var(--danger)}
+    .log-dot.seg{background:var(--accent)}
+    .log-dot.crack{background:var(--info)}
+    .log-dot.demo{background:var(--warn)}
+    .log-info{flex:1;min-width:0}
+    .log-type{font-size:.68rem;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .log-meta{font-family:'Space Mono',monospace;font-size:.55rem;color:var(--muted)}
+    .log-cost{font-family:'Space Mono',monospace;font-size:.6rem;color:var(--accent);white-space:nowrap}
+    .no-data{font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);text-align:center;padding:16px 0}
+    .demo-notice{background:rgba(245,166,35,.07);border:1px solid rgba(245,166,35,.2);border-radius:5px;padding:7px 10px;font-family:'Space Mono',monospace;font-size:.58rem;color:var(--warn);line-height:1.6;margin-bottom:8px}
+    .demo-notice strong{display:block;margin-bottom:2px}
+
+    /* ── Mode toggle (AUTO / MANUAL) ── */
+    .mode-toggle{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:999px;padding:3px;gap:2px}
+    .mode-opt{padding:4px 14px;border-radius:999px;font-family:'Space Mono',monospace;font-size:.6rem;font-weight:700;color:var(--muted);cursor:pointer;user-select:none;transition:all .2s;letter-spacing:.05em}
+    .mode-opt.active{background:var(--accent);color:#fff}
+    .mode-opt:not(.active):hover{color:var(--text)}
+
+    /* ── Capture button (MANUAL mode) ── */
+    .capture-bar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:none;z-index:5}
+    .capture-bar.visible{display:block}
+    .btn-capture{display:flex;align-items:center;gap:10px;padding:12px 28px;border-radius:999px;background:var(--accent);color:#fff;border:none;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:800;cursor:pointer;box-shadow:0 4px 24px rgba(37,99,235,.35);transition:all .2s;letter-spacing:.02em}
+    .btn-capture:hover{background:var(--accent2);transform:scale(1.04)}
+    .btn-capture:active{transform:scale(.97)}
+    .btn-capture:disabled{opacity:.55;cursor:wait;transform:none}
+    .capture-ring{width:14px;height:14px;border:2.5px solid #fff;border-radius:50%;flex-shrink:0}
+    .btn-capture.detecting .capture-ring{border-top-color:transparent;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── Frozen capture overlay ── */
+    .captured-overlay{position:absolute;inset:0;display:none;z-index:4;background:#000}
+    .captured-overlay.visible{display:block}
+    .captured-overlay img{width:100%;height:100%;object-fit:cover}
+    .captured-badge{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(10,10,10,.85);border:1px solid var(--accent);color:var(--accent);backdrop-filter:blur(8px);padding:6px 16px;border-radius:999px;font-family:'Space Mono',monospace;font-size:.65rem;font-weight:700;letter-spacing:.1em;display:flex;align-items:center;gap:8px}
+    .captured-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:6}
+    .captured-flash.flash{animation:flashAnim .35s ease-out}
+    @keyframes flashAnim{0%{opacity:.85}100%{opacity:0}}
+
+    /* ── View tabs (Live / History) ── */
+    .view-tabs{display:flex;gap:4px;padding:0 28px;border-bottom:1px solid var(--border);background:var(--bg)}
+    .view-tab{padding:11px 18px;font-family:'Space Mono',monospace;font-size:.65rem;font-weight:700;letter-spacing:.08em;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s;text-transform:uppercase;display:flex;align-items:center;gap:7px}
+    .view-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .view-tab:not(.active):hover{color:var(--text)}
+    .view-tab .count-pill{background:var(--surface2);border:1px solid var(--border2);border-radius:999px;padding:1px 7px;font-size:.6rem;color:var(--text)}
+    .view-tab.active .count-pill{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+    /* ── History view ── */
+    .history-view{display:none;flex-direction:column;height:calc(100vh - 57px - 42px);overflow:hidden}
+    .history-view.active{display:flex}
+    .history-toolbar{display:flex;align-items:center;gap:10px;padding:14px 28px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+    .filter-group{display:flex;align-items:center;gap:6px}
+    .filter-label{font-family:'Space Mono',monospace;font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+    .filter-select{background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-family:'Space Mono',monospace;font-size:.62rem;outline:none;cursor:pointer}
+    .filter-select:focus{border-color:var(--accent)}
+    .history-spacer{flex:1}
+    .history-count{font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted)}
+
+    .history-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:20px 28px;overflow-y:auto;align-content:start}
+    .history-grid::-webkit-scrollbar{width:6px}
+    .history-grid::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+
+    .dmg-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:all .18s;animation:slideIn .25s ease}
+    .dmg-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+    .dmg-thumb{position:relative;width:100%;aspect-ratio:16/9;background:#000;overflow:hidden}
+    .dmg-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .dmg-thumb-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--border2)}
+    .dmg-source{position:absolute;top:8px;right:8px;padding:2px 8px;border-radius:999px;font-family:'Space Mono',monospace;font-size:.52rem;font-weight:700;letter-spacing:.05em;backdrop-filter:blur(6px)}
+    .dmg-source.auto{background:rgba(77,166,255,.2);color:var(--info);border:1px solid rgba(77,166,255,.4)}
+    .dmg-source.manual{background:rgba(37,99,235,.16);color:var(--accent);border:1px solid rgba(37,99,235,.4)}
+    .dmg-body{padding:10px 12px}
+    .dmg-class{font-size:.78rem;font-weight:700;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .dmg-meta{display:flex;align-items:center;justify-content:space-between;gap:6px}
+    .dmg-stat{font-family:'Space Mono',monospace;font-size:.58rem;color:var(--muted)}
+    .dmg-stat strong{color:var(--accent);font-weight:700}
+    .dmg-time{font-family:'Space Mono',monospace;font-size:.52rem;color:var(--muted);margin-top:6px}
+
+    .history-empty{grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted);font-family:'Space Mono',monospace;font-size:.7rem;line-height:2}
+
+    /* ── Detail modal ── */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(28,40,62,.42);backdrop-filter:blur(4px);z-index:1000;display:none;align-items:center;justify-content:center;padding:24px;animation:fadeIn .2s ease}
+    .modal-backdrop.visible{display:flex}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    .modal{background:var(--surface);border:1px solid var(--border2);border-radius:14px;max-width:820px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;animation:slideUp .25s ease;box-shadow:0 24px 60px rgba(20,30,50,.28)}
+    @keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+    .modal-title{font-size:1rem;font-weight:800;display:flex;align-items:center;gap:10px}
+    .modal-close{background:transparent;border:1px solid var(--border2);color:var(--muted2);width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;transition:all .2s}
+    .modal-close:hover{border-color:var(--danger);color:var(--danger)}
+    .modal-body{display:grid;grid-template-columns:1fr 280px;gap:0;overflow:hidden;flex:1;min-height:0}
+    .modal-image{background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .modal-image img{width:100%;height:100%;object-fit:contain;max-height:62vh}
+    .modal-side{padding:18px;overflow-y:auto;border-left:1px solid var(--border)}
+    .modal-side::-webkit-scrollbar{width:4px}
+    .modal-side::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+    .modal-section-title{font-size:.58rem;font-family:'Space Mono',monospace;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin:0 0 10px}
+    .modal-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+    .modal-row:last-of-type{border-bottom:none}
+    .modal-key{font-size:.66rem;color:var(--muted)}
+    .modal-val{font-family:'Space Mono',monospace;font-size:.7rem;font-weight:700}
+    .modal-val.accent{color:var(--accent)}
+    .modal-det-block{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:10px}
+    .modal-det-block-title{font-size:.6rem;font-family:'Space Mono',monospace;color:var(--muted2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}
+    .modal-actions{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+
+    /* ── Map view ── */
+    .map-view{display:none;flex-direction:column;height:calc(100vh - 57px - 42px)}
+    .map-view.active{display:flex}
+    .survey-bar{display:flex;align-items:center;gap:14px;padding:12px 28px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--surface)}
+    .survey-status{display:flex;align-items:center;gap:9px;font-family:'Space Mono',monospace;font-size:.68rem}
+    .survey-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex-shrink:0}
+    .survey-dot.live{background:var(--accent);box-shadow:0 0 0 0 rgba(37,99,235,.6);animation:surveyPulse 1.6s infinite}
+    @keyframes surveyPulse{0%{box-shadow:0 0 0 0 rgba(37,99,235,.5)}70%{box-shadow:0 0 0 7px rgba(37,99,235,0)}100%{box-shadow:0 0 0 0 rgba(37,99,235,0)}}
+    .survey-meta{color:var(--muted2);font-size:.62rem}
+    .survey-meta strong{color:var(--text)}
+    .survey-spacer{flex:1}
+
+    #map{flex:1;width:100%;min-height:500px;height:calc(100vh - 57px - 42px - 52px);background:#e6eaf0;z-index:1}
+    .map-empty-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:400;background:rgba(255,255,255,.92);border:1px solid var(--border2);border-radius:10px;padding:18px 22px;font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted2);text-align:center;line-height:1.9;pointer-events:none;backdrop-filter:blur(4px);box-shadow:0 4px 18px rgba(20,30,50,.12)}
+    .map-legend{position:absolute;bottom:22px;right:14px;z-index:450;background:rgba(255,255,255,.94);border:1px solid var(--border2);border-radius:10px;padding:11px 14px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--text);backdrop-filter:blur(4px);box-shadow:0 4px 18px rgba(20,30,50,.12)}
+    .map-legend-title{font-size:.54rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.09em;margin-bottom:7px}
+    .map-legend-row{display:flex;align-items:center;gap:8px;margin:3px 0}
+    .lg-dot{width:10px;height:10px;border-radius:50%;border:1.5px solid #0a0a0a;flex-shrink:0}
+    .lg-line{width:16px;height:3px;border-radius:2px;background:linear-gradient(90deg,#00e5ff,#ff2d9b);flex-shrink:0}
+
+    /* Leaflet dark theming */
+    .leaflet-container{background:#e6eaf0;font-family:'Space Mono',monospace}
+    .leaflet-tile{filter:none}
+    .leaflet-control-zoom a{background:var(--surface)!important;color:var(--accent)!important;border-color:var(--border2)!important}
+    .leaflet-control-attribution{background:rgba(255,255,255,.82)!important;color:var(--muted2)!important}
+    .leaflet-control-attribution a{color:var(--muted2)!important}
+    .leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);border:1px solid var(--border2);border-radius:10px}
+    .leaflet-popup-tip{background:var(--surface);border:1px solid var(--border2)}
+    .leaflet-popup-content{margin:12px 14px;font-family:'Syne',sans-serif}
+
+    .pin-pop-title{font-weight:800;font-size:.85rem;margin-bottom:4px}
+    .pin-pop-row{font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted2);margin:2px 0}
+    .pin-pop-row strong{color:var(--accent)}
+    .pin-pop-btn{margin-top:8px;width:100%;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px;font-family:'Syne',sans-serif;font-weight:700;font-size:.7rem;cursor:pointer}
+
+    /* Custom marker badge */
+    .map-pin{background:var(--accent);color:#fff;border-radius:50% 50% 50% 0;width:30px;height:30px;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 8px rgba(20,30,50,.35);font-weight:800;font-size:.7rem}
+    .map-pin span{transform:rotate(45deg);font-family:'Space Mono',monospace}
+    .map-pin.sev-high{background:var(--danger)}
+    .map-pin.sev-med{background:var(--warn)}
+    .map-pin.here{background:var(--info);border-radius:50%;transform:none;width:18px;height:18px;box-shadow:0 0 0 6px rgba(77,166,255,.25)}
+
+    /* ── Session detail & gallery (overlay panels) ── */
+    .panel-view{display:none;flex-direction:column;height:calc(100vh - 57px - 42px);overflow:hidden}
+    .panel-view.active{display:flex}
+    .breadcrumb{display:flex;align-items:center;gap:8px;padding:13px 28px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted2);flex-wrap:wrap}
+    .breadcrumb .crumb{cursor:pointer;color:var(--muted2);transition:color .2s}
+    .breadcrumb .crumb:hover{color:var(--accent)}
+    .breadcrumb .crumb.here{color:var(--text);cursor:default}
+    .breadcrumb .sep{color:var(--border2)}
+
+    .panel-scroll{overflow-y:auto;padding:24px 28px}
+    .panel-scroll::-webkit-scrollbar{width:6px}
+    .panel-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+
+    .sess-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+    .sess-title{font-size:1.5rem;font-weight:800;line-height:1.2;margin-bottom:8px}
+    .sess-submeta{display:flex;gap:18px;flex-wrap:wrap;font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted2)}
+    .sess-submeta strong{color:var(--accent)}
+    .sess-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:26px}
+    .kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+    .kpi-num{font-size:1.5rem;font-weight:800;color:var(--accent)}
+    .kpi-num.neutral{color:var(--text)}
+    .kpi-label{font-family:'Space Mono',monospace;font-size:.56rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+
+    .type-list-title{font-family:'Space Mono',monospace;font-size:.62rem;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px}
+    .type-row{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:10px;cursor:pointer;transition:all .18s}
+    .type-row:hover{border-color:var(--accent);transform:translateX(3px)}
+    .type-bar-wrap{flex:1;display:flex;flex-direction:column;gap:6px}
+    .type-bar-top{display:flex;align-items:center;justify-content:space-between}
+    .type-name{font-weight:700;font-size:.9rem}
+    .type-count{font-family:'Space Mono',monospace;font-size:.72rem;color:var(--muted2)}
+    .type-count strong{color:var(--accent);font-size:.95rem}
+    .type-bar{height:5px;background:var(--surface2);border-radius:99px;overflow:hidden}
+    .type-bar-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .5s ease}
+    .type-arrow{color:var(--muted);font-size:1.1rem}
+
+    .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+    .gal-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:all .18s}
+    .gal-card:hover{border-color:var(--accent);transform:translateY(-3px)}
+    .gal-thumb{width:100%;aspect-ratio:16/9;background:#000;object-fit:cover;display:block}
+    .gal-body{padding:13px 15px}
+    .gal-row{display:flex;justify-content:space-between;align-items:center;font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted2);margin:4px 0}
+    .gal-row strong{color:var(--accent);font-weight:700}
+    .gal-card-title{font-weight:700;font-size:.84rem;margin-bottom:9px;display:flex;align-items:center;justify-content:space-between;gap:6px}
+  </style>
+</head>
+<body>
+<!-- ════════════════════════════════════════════════════════════════════
+     ROAD AI — PRESENTATION MOCKUP
+     This file is NOT part of the real application. It connects to nothing.
+     It exists only so you can place custom pins / damages / photos / paths
+     and take screenshots for slides. Edit freely.
+     ════════════════════════════════════════════════════════════════════ -->
+<style>
+  /* editor-only chrome (hidden in Preview mode for clean screenshots) */
+  .pres-editor{position:fixed;top:70px;right:14px;z-index:1200;width:300px;max-height:calc(100vh - 90px);overflow-y:auto;
+    background:var(--surface);border:1px solid var(--border2);border-radius:12px;box-shadow:0 18px 50px rgba(20,30,50,.22);
+    font-family:'Syne',sans-serif}
+  .pres-editor::-webkit-scrollbar{width:5px}.pres-editor::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+  .pe-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
+  .pe-head b{font-size:.82rem}
+  .pe-sec{padding:12px 14px;border-bottom:1px solid var(--border)}
+  .pe-sec h4{font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
+  .pe-field{margin-bottom:9px}
+  .pe-field label{display:block;font-size:.6rem;color:var(--muted2);margin-bottom:3px;font-family:'Space Mono',monospace}
+  .pe-field input,.pe-field select,.pe-field textarea{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 8px;color:var(--text);font-family:'Space Mono',monospace;font-size:.66rem;outline:none}
+  .pe-field input:focus,.pe-field select:focus{border-color:var(--accent)}
+  .pe-row{display:flex;gap:7px}.pe-row>*{flex:1}
+  .tool-btn{width:100%;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);
+    font-family:'Syne',sans-serif;font-weight:700;font-size:.7rem;cursor:pointer;margin-bottom:7px;transition:all .15s;text-align:left;display:flex;align-items:center;gap:8px}
+  .tool-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .tool-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .tool-btn.danger:hover{border-color:var(--danger);color:var(--danger)}
+  .pe-hint{font-family:'Space Mono',monospace;font-size:.56rem;color:var(--muted);line-height:1.6;margin-top:4px}
+  .pres-flag{display:flex;align-items:center;gap:7px;padding:5px 12px;border:1px solid var(--warn);border-radius:999px;
+    font-family:'Space Mono',monospace;font-size:.62rem;color:var(--warn)}
+  .map-tool-hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:600;background:var(--accent);color:#fff;
+    padding:7px 16px;border-radius:999px;font-family:'Space Mono',monospace;font-size:.64rem;font-weight:700;box-shadow:0 4px 16px rgba(37,99,235,.4);display:none}
+  .map-tool-hint.show{display:block;animation:slideIn .2s ease}
+  /* Preview mode hides all editor chrome */
+  body.preview-mode .pres-editor,
+  body.preview-mode .map-tool-hint,
+  body.preview-mode .pe-only{display:none!important}
+  .live-upload-label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+</style>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+    <div class="logo-text">Road<span>AI</span></div>
+  </div>
+  <div class="header-center">
+    <div class="pres-flag">📸 PRESENTATION MOCKUP</div>
+    <button class="btn btn-primary" id="previewBtn" onclick="togglePreview()">👁 Preview (hide editor)</button>
+    <button class="btn btn-ghost" onclick="resetMock()">↺ Reset</button>
+  </div>
+  <div class="header-time" id="clock">--:--:--</div>
+</header>
+
+<!-- ── VIEW TABS ── -->
+<div class="view-tabs">
+  <div class="view-tab active" id="tabMap" onclick="switchView('map')"><span>🗺 แผนที่สำรวจ</span><span class="count-pill" id="pinCount">0</span></div>
+  <div class="view-tab" id="tabLive" onclick="switchView('live')"><span>◉ ตรวจจับสด</span></div>
+  <div class="view-tab" id="tabHistory" onclick="switchView('history')"><span>▤ ประวัติความเสียหาย</span><span class="count-pill" id="histCount">0</span></div>
+</div>
+
+<!-- ════════ MAP VIEW ════════ -->
+<div class="map-view active" id="mapView">
+  <div class="survey-bar">
+    <div class="survey-status"><span class="survey-dot live" id="surveyDot"></span><span id="surveyStatusText">กำลังสำรวจ</span></div>
+    <span class="survey-meta" id="surveyMeta"></span>
+    <div class="survey-spacer"></div>
+    <button class="btn btn-primary">▶ เริ่มสำรวจ</button>
+    <button class="btn btn-danger">■ จบการสำรวจ</button>
+  </div>
+  <div style="position:relative;flex:1">
+    <div id="map"></div>
+    <div class="map-tool-hint" id="mapToolHint"></div>
+    <div class="map-legend">
+      <div class="map-legend-title">ระดับความรุนแรง</div>
+      <div class="map-legend-row"><span class="lg-dot" style="background:#ff3b3b"></span>สูง (High)</div>
+      <div class="map-legend-row"><span class="lg-dot" style="background:#ffa726"></span>ปานกลาง (Medium)</div>
+      <div class="map-legend-row"><span class="lg-dot" style="background:#ffe14d"></span>ต่ำ (Low)</div>
+      <div class="map-legend-row" style="margin-top:6px"><span class="lg-line"></span>เส้นทางสำรวจ</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ LIVE VIEW ════════ -->
+<div class="live-view" id="liveView" style="display:none">
+<div class="layout">
+  <div class="video-section">
+    <div class="video-label">// กล้อง — ตรวจจับแบบเรียลไทม์</div>
+    <div class="video-wrapper" id="liveWrap">
+      <img id="liveFeed" src="" alt="" style="display:none"/>
+      <div class="stream-placeholder" id="livePlaceholder">
+        <div style="opacity:.5;font-size:2rem">🛣️</div>
+        <div class="stream-placeholder-title" style="color:var(--accent)">อัปโหลดภาพถนน</div>
+        <div class="stream-placeholder-sub">ใช้แผงแก้ไขด้านขวา → "ภาพกล้อง" เพื่อใส่ภาพ<br/>แล้วเพิ่มกรอบการตรวจจับ</div>
+      </div>
+      <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+      <div class="video-badge"><div class="rec-dot"></div><span>REC · LIVE</span></div>
+      <svg id="liveBoxes" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></svg>
+    </div>
+    <div class="session-bar" style="grid-template-columns:repeat(3,1fr)">
+      <div class="session-card"><div class="session-val" id="sumTotal">0</div><div class="session-label">จำนวนที่ตรวจพบ</div></div>
+      <div class="session-card"><div class="session-val" id="sumArea">0 m²</div><div class="session-label">พื้นที่ความเสียหาย</div></div>
+      <div class="session-card"><div class="session-val danger" id="sumHigh">0</div><div class="session-label">ความรุนแรงสูง</div></div>
+    </div>
+  </div>
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">// สถิติเซสชัน</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value" id="statUptime">12m 04s</div><div class="stat-label">เวลาทำงาน</div></div>
+        <div class="stat-card"><div class="stat-value" id="statAvgConf">87%</div><div class="stat-label">ความเชื่อมั่นเฉลี่ย</div></div>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">// การตรวจจับปัจจุบัน</div>
+      <div class="metric-block">
+        <div class="metric-block-title">▸ กรอบขอบเขต</div>
+        <div class="metric-row"><span class="metric-key">กว้าง</span><span class="metric-val" id="curW">28.4 cm</span></div>
+        <div class="metric-row"><span class="metric-key">สูง</span><span class="metric-val" id="curH">22.1 cm</span></div>
+        <div class="metric-row"><span class="metric-key">พื้นที่</span><span class="metric-val" id="curBA">627 cm²</span></div>
+      </div>
+      <div class="metric-block">
+        <div class="metric-block-title">▸ การประเมิน</div>
+        <div class="metric-row"><span class="metric-key">ความรุนแรง</span><span class="metric-val" id="curSev"></span></div>
+        <div class="metric-row"><span class="metric-key">ประเภทความเสียหาย</span><span class="metric-val" id="curClass">หลุมบ่อ</span></div>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">// ความเชื่อมั่น</div>
+      <div class="conf-item"><div class="conf-header"><span class="conf-name">การตรวจจับวัตถุ</span><span class="conf-pct" id="cPctA">91%</span></div><div class="conf-bar-bg"><div class="conf-bar-fill" id="cBarA" style="width:91%"></div></div></div>
+      <div class="conf-item"><div class="conf-header"><span class="conf-name">เซกเมนต์</span><span class="conf-pct" id="cPctB">88%</span></div><div class="conf-bar-bg"><div class="conf-bar-fill" id="cBarB" style="width:88%"></div></div></div>
+    </div>
+    <div class="log-section">
+      <div class="log-header"><div class="sidebar-title" style="margin-bottom:0">// บันทึกการตรวจจับ</div></div>
+      <div class="log-list" id="logList"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ════════ HISTORY VIEW ════════ -->
+<div class="history-view" id="historyView">
+  <div class="history-toolbar">
+    <div class="filter-group"><span class="filter-label">ประเภท</span>
+      <select class="filter-select"><option>ทุกประเภท</option></select></div>
+    <div class="filter-group"><span class="filter-label">ความรุนแรง</span>
+      <select class="filter-select"><option>ทั้งหมด</option><option>สูง</option><option>ปานกลาง</option><option>ต่ำ</option></select></div>
+    <div class="history-spacer"></div>
+    <span class="history-count"><span id="histShown">0</span> รายการ</span>
+  </div>
+  <div class="history-grid" id="historyGrid"></div>
+</div>
+
+<!-- ════════ DETAIL MODAL ════════ -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><span id="mSevDot" style="width:10px;height:10px;border-radius:50%;background:var(--muted)"></span><span id="mClass">รายละเอียดความเสียหาย</span></div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-image"><img id="mImg" src="" alt=""/></div>
+      <div class="modal-side">
+        <div class="modal-section-title">▸ สรุป</div>
+        <div class="modal-row"><span class="modal-key">ประเภทความเสียหาย</span><span class="modal-val" id="mType">—</span></div>
+        <div class="modal-row"><span class="modal-key">ความรุนแรง</span><span class="modal-val" id="mSev">—</span></div>
+        <div class="modal-row"><span class="modal-key">ความเชื่อมั่น</span><span class="modal-val accent" id="mConf">—</span></div>
+        <div class="modal-row"><span class="modal-key">พื้นที่ความเสียหาย</span><span class="modal-val" id="mArea">—</span></div>
+        <div class="modal-row"><span class="modal-key">พิกัด GPS</span><span class="modal-val" id="mGps">—</span></div>
+        <div class="modal-row"><span class="modal-key">บันทึกเมื่อ</span><span class="modal-val" id="mTime">—</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ EDITOR DRAWER ════════ -->
+<div class="pres-editor" id="editor">
+  <div class="pe-head"><b>✎ แผงสร้างสไลด์ / Slide Builder</b></div>
+
+  <!-- MAP tools -->
+  <div class="pe-sec" id="mapTools">
+    <h4>แผนที่ — เครื่องมือ</h4>
+    <button class="tool-btn" id="tAddPin" onclick="setTool('pin')">📍 เพิ่มจุดความเสียหาย (คลิกแผนที่)</button>
+    <button class="tool-btn" id="tPath" onclick="setTool('path')">✏️ วาดเส้นทางสำรวจ (คลิกแผนที่)</button>
+    <button class="tool-btn" id="tStart" onclick="setTool('start')">🟢 ตั้งจุดเริ่ม</button>
+    <button class="tool-btn" id="tEnd" onclick="setTool('end')">⚫ ตั้งจุดสิ้นสุด</button>
+    <button class="tool-btn danger" onclick="clearPath()">↺ ล้างเส้นทาง</button>
+    <button class="tool-btn danger" onclick="clearAll()">🗑 ล้างทั้งหมด</button>
+  </div>
+
+  <!-- New damage defaults -->
+  <div class="pe-sec">
+    <h4>คุณสมบัติจุดความเสียหายถัดไป</h4>
+    <div class="pe-field"><label>ประเภท (Damage type)</label>
+      <select id="fType">
+        <option value="หลุมบ่อ (Pothole)">หลุมบ่อ (Pothole)</option>
+        <option value="รอยแตกตามยาว (Longitudinal Crack)">รอยแตกตามยาว (Longitudinal Crack)</option>
+        <option value="รอยแตกตามขวาง (Transverse Crack)">รอยแตกตามขวาง (Transverse Crack)</option>
+        <option value="รอยแตกหนังจระเข้ (Alligator Crack)">รอยแตกหนังจระเข้ (Alligator Crack)</option>
+      </select>
+    </div>
+    <div class="pe-row">
+      <div class="pe-field"><label>ความรุนแรง</label>
+        <select id="fSev"><option value="high">สูง</option><option value="medium" selected>ปานกลาง</option><option value="low">ต่ำ</option></select></div>
+      <div class="pe-field"><label>ความเชื่อมั่น %</label><input id="fConf" type="number" value="89" min="1" max="100"/></div>
+    </div>
+    <div class="pe-field"><label>พื้นที่ (m²)</label><input id="fArea" type="number" value="0.062" step="0.001"/></div>
+    <div class="pe-field"><label>รูปภาพความเสียหาย (Damage photo)</label><input id="fPhoto" type="file" accept="image/*"/></div>
+    <div class="pe-hint">ตั้งค่าด้านบน → กด "เพิ่มจุดความเสียหาย" → คลิกบนแผนที่ แต่ละจุดจะปรากฏบนแผนที่และในประวัติพร้อมกัน</div>
+  </div>
+
+  <!-- Randomize -->
+  <div class="pe-sec">
+    <h4>🎲 สุ่มค่า (Randomize)</h4>
+    <label class="tool-btn" style="cursor:pointer" id="rndBtn">
+      <input type="checkbox" id="rndOn" style="width:auto" onchange="onRndToggle()"/> เปิดการสุ่มค่าสำหรับจุดใหม่
+    </label>
+    <div id="rndOpts" style="display:none">
+      <div class="pe-field"><label>คลาสที่จะสุ่ม (เลือกได้)</label>
+        <div class="rnd-cls" style="display:flex;flex-direction:column;gap:5px">
+          <label><input type="checkbox" checked style="width:auto" value="หลุมบ่อ (Pothole)"/> หลุมบ่อ (Pothole)</label>
+          <label><input type="checkbox" checked style="width:auto" value="รอยแตกตามยาว (Longitudinal Crack)"/> รอยแตกตามยาว (Longitudinal Crack)</label>
+          <label><input type="checkbox" checked style="width:auto" value="รอยแตกตามขวาง (Transverse Crack)"/> รอยแตกตามขวาง (Transverse Crack)</label>
+          <label><input type="checkbox" checked style="width:auto" value="รอยแตกหนังจระเข้ (Alligator Crack)"/> รอยแตกหนังจระเข้ (Alligator Crack)</label>
+        </div>
+      </div>
+      <div class="pe-row">
+        <div class="pe-field"><label>ความเชื่อมั่น min %</label><input id="rConfMin" type="number" value="70" min="1" max="100"/></div>
+        <div class="pe-field"><label>max %</label><input id="rConfMax" type="number" value="96" min="1" max="100"/></div>
+      </div>
+      <div class="pe-row">
+        <div class="pe-field"><label>พื้นที่ min (m²)</label><input id="rAreaMin" type="number" value="0.010" step="0.001"/></div>
+        <div class="pe-field"><label>max (m²)</label><input id="rAreaMax" type="number" value="0.080" step="0.001"/></div>
+      </div>
+      <div class="pe-field"><label>ความรุนแรงที่จะสุ่ม</label>
+        <div class="rnd-sev" style="display:flex;gap:12px">
+          <label><input type="checkbox" checked style="width:auto" value="high"/> สูง</label>
+          <label><input type="checkbox" checked style="width:auto" value="medium"/> ปานกลาง</label>
+          <label><input type="checkbox" checked style="width:auto" value="low"/> ต่ำ</label>
+        </div>
+      </div>
+      <div class="pe-hint">เมื่อเปิด แต่ละจุดที่วางจะได้คลาส/ความรุนแรง/ความเชื่อมั่น/พื้นที่ แบบสุ่มในช่วงที่กำหนด</div>
+    </div>
+  </div>
+
+  <!-- Survey meta -->
+  <div class="pe-sec">
+    <h4>ข้อมูลการสำรวจ</h4>
+    <div class="pe-field"><label>ชื่อถนน</label><input id="fRoad" value="ถนนห้วยแก้ว (Huay Kaew Rd)" oninput="renderMeta()"/></div>
+    <div class="pe-field"><label>ระยะทาง (km)</label><input id="fDist" type="number" value="2.4" step="0.1" oninput="renderMeta()"/></div>
+  </div>
+
+  <!-- LIVE tools -->
+  <div class="pe-sec">
+    <h4>ตรวจจับสด — ภาพกล้อง</h4>
+    <div class="pe-field"><label>ภาพกล้อง (Camera feed image)</label><input id="fLive" type="file" accept="image/*" onchange="setLiveImage(this)"/></div>
+    <div class="pe-hint">อัปโหลดภาพถนนเพื่อใช้เป็นภาพกล้องสด แล้วใช้ภาพจริงจากกล้องในการนำเสนอ</div>
+  </div>
+</div>
+
+<script>
+// ════════ Presentation mockup — pure client-side, no backend ════════
+const CM_CENTER=[18.7965,98.9670];
+const SEV_COLOR={high:'#ff3b3b',medium:'#ffa726',low:'#ffe14d'};
+const SEV_LABEL={high:'สูง',medium:'ปานกลาง',low:'ต่ำ'};
+const SEV_CLASS={high:'sev-high',medium:'sev-med',low:''};
+
+let map, tool=null, damages=[], pathPts=[], pathLine=null, startM=null, endM=null, pinLayer=[], idSeq=0;
+
+function updateClock(){document.getElementById('clock').textContent=new Date().toLocaleTimeString()}
+setInterval(updateClock,1000);updateClock();
+
+// ── Map ──
+function initMap(){
+  map=L.map('map',{zoomControl:true}).setView(CM_CENTER,15);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd',attribution:'© OpenStreetMap © CARTO'}).addTo(map);
+  map.on('click',onMapClick);
+}
+function setTool(t){
+  tool=(tool===t)?null:t;
+  ['pin','path','start','end'].forEach(x=>{
+    const b={pin:'tAddPin',path:'tPath',start:'tStart',end:'tEnd'}[x];
+    document.getElementById(b).classList.toggle('active',tool===x);
+  });
+  const hint=document.getElementById('mapToolHint');
+  const msg={pin:'คลิกบนแผนที่เพื่อวางจุดความเสียหาย',path:'คลิกเพื่อเพิ่มจุดเส้นทาง',start:'คลิกเพื่อวางจุดเริ่ม',end:'คลิกเพื่อวางจุดสิ้นสุด'}[tool];
+  if(msg){hint.textContent=msg;hint.classList.add('show')}else{hint.classList.remove('show')}
+}
+function onMapClick(e){
+  const ll=[e.latlng.lat,e.latlng.lng];
+  if(tool==='pin') addDamage(ll);
+  else if(tool==='path'){ pathPts.push(ll); drawPath(); }
+  else if(tool==='start'){ setFlag('start',ll); }
+  else if(tool==='end'){ setFlag('end',ll); }
+}
+function drawPath(){
+  if(pathLine) map.removeLayer(pathLine);
+  if(pathPts.length>=2){
+    // identical to index.html: black casing + bright session-colour line
+    const casing=L.polyline(pathPts,{color:'#000',weight:7,opacity:.35});
+    const line=L.polyline(pathPts,{color:'#2563eb',weight:4,opacity:.95,lineCap:'round',lineJoin:'round'});
+    pathLine=L.layerGroup([casing,line]).addTo(map);
+    // keep damage dots ON TOP of the path (the path may be drawn after them)
+    pinLayer.forEach(m=>m.bringToFront());
+  }
+  renderMeta();
+}
+function clearPath(){ pathPts=[]; if(pathLine){map.removeLayer(pathLine);pathLine=null;} renderMeta(); }
+// identical to index.html flagIcon(): session-colour disc with ▶ (start) / ■ (end)
+function flagIcon(kind){
+  const glyph=kind==='start'?'▶':'■';
+  return L.divIcon({className:'',iconSize:[22,22],iconAnchor:[11,11],popupAnchor:[0,-12],
+    html:`<div style="width:22px;height:22px;border-radius:50%;background:#2563eb;border:2px solid #0a0a0a;`+
+         `display:flex;align-items:center;justify-content:center;color:#0a0a0a;font:700 9px 'Space Mono',monospace;`+
+         `box-shadow:0 2px 8px rgba(0,0,0,.6)">${glyph}</div>`});
+}
+function setFlag(which,ll){
+  if(which==='start'){ if(startM)map.removeLayer(startM); startM=L.marker(ll,{icon:flagIcon('start')}).addTo(map); }
+  else { if(endM)map.removeLayer(endM); endM=L.marker(ll,{icon:flagIcon('end')}).addTo(map); }
+}
+
+// ── Damage (pin + history card + live log, unified) ──
+const _rnd=(a,b)=>a+Math.random()*(b-a);
+const _pick=arr=>arr[Math.floor(Math.random()*arr.length)];
+function nextDamageProps(){
+  const photo=window._pendingPhoto||'';
+  if(document.getElementById('rndOn').checked){
+    const classes=[...document.querySelectorAll('.rnd-cls input:checked')].map(c=>c.value);
+    const sevs=[...document.querySelectorAll('.rnd-sev input:checked')].map(c=>c.value);
+    const cmin=+document.getElementById('rConfMin').value, cmax=+document.getElementById('rConfMax').value;
+    const amin=+document.getElementById('rAreaMin').value, amax=+document.getElementById('rAreaMax').value;
+    return {
+      class: classes.length?_pick(classes):document.getElementById('fType').value,
+      severity: sevs.length?_pick(sevs):'medium',
+      confidence: +(_rnd(Math.min(cmin,cmax),Math.max(cmin,cmax))/100).toFixed(2),
+      area: +(_rnd(Math.min(amin,amax),Math.max(amin,amax))).toFixed(3),
+      photo
+    };
+  }
+  return {
+    class:document.getElementById('fType').value,
+    severity:document.getElementById('fSev').value,
+    confidence:+document.getElementById('fConf').value/100,
+    area:+document.getElementById('fArea').value,
+    photo
+  };
+}
+function addDamage(ll,opts){
+  const f=opts||nextDamageProps();
+  const d={id:++idSeq,lat:ll[0],lng:ll[1],class:f.class,severity:f.severity,confidence:f.confidence,area:f.area,photo:f.photo,time:Date.now()};
+  damages.push(d);
+  d.num=damages.length;          // displayed pin number = position (1,2,3…)
+  addPin(d);
+  renderHistory(); renderMeta(); renderLog();
+}
+function addPin(d){
+  // identical to index.html: severity-coloured dot with a dark outline
+  const c=SEV_COLOR[d.severity]||SEV_COLOR.low;
+  const m=L.circleMarker([d.lat,d.lng],{radius:6,color:'#0a0a0a',weight:1.5,fillColor:c,fillOpacity:1}).addTo(map);
+  m.bindPopup(`<div class="pin-pop-title">${d.class}</div>
+    <div class="pin-pop-row">ความรุนแรง: <strong style="color:${c}">${SEV_LABEL[d.severity]}</strong></div>
+    <div class="pin-pop-row">ความเชื่อมั่น: <strong>${Math.round(d.confidence*100)}%</strong></div>
+    <div class="pin-pop-row">พื้นที่: <strong>${d.area.toFixed(3)} m²</strong></div>
+    <button class="pin-pop-btn" onclick="openModal(${d.id})">ดูรายละเอียด →</button>`);
+  pinLayer.push(m);
+}
+function clearAll(){
+  damages=[]; idSeq=0;            // restart numbering from 1
+  pinLayer.forEach(m=>map.removeLayer(m)); pinLayer=[];
+  renderHistory(); renderMeta(); renderLog();
+}
+
+// ── Renders ──
+function sevBadge(s){return `<span class="sev-badge ${{high:'sev-high',medium:'sev-medium',low:'sev-low'}[s]}">${SEV_LABEL[s]}</span>`}
+function renderMeta(){
+  const road=document.getElementById('fRoad').value, dist=document.getElementById('fDist').value;
+  document.getElementById('surveyStatusText').textContent=road;
+  document.getElementById('surveyMeta').innerHTML=`<strong>${damages.length}</strong> จุดเสียหาย · <strong>${dist}</strong> กม.`;
+  document.getElementById('pinCount').textContent=damages.length;
+  document.getElementById('histCount').textContent=damages.length;
+  document.getElementById('histShown').textContent=damages.length;
+  document.getElementById('sumTotal').textContent=damages.length;
+  const area=damages.reduce((a,d)=>a+d.area,0);
+  document.getElementById('sumArea').textContent=area.toFixed(2)+' m²';
+  document.getElementById('sumHigh').textContent=damages.filter(d=>d.severity==='high').length;
+}
+function thumbFor(d){return d.photo?`<img src="${d.photo}"/>`:`<div class="dmg-thumb-empty">▤</div>`}
+function renderHistory(){
+  const g=document.getElementById('historyGrid');
+  if(!damages.length){g.innerHTML='<div class="history-empty">ยังไม่มีความเสียหาย<br/>เพิ่มจุดบนแผนที่เพื่อสร้างการ์ด</div>';return;}
+  g.innerHTML=[...damages].reverse().map(d=>`
+    <div class="dmg-card" onclick="openModal(${d.id})">
+      <div class="dmg-thumb">${thumbFor(d)}<span class="dmg-source auto">AUTO</span></div>
+      <div class="dmg-body">
+        <div class="dmg-class">${d.class}</div>
+        <div class="dmg-meta"><span class="dmg-stat"><strong>${d.area.toFixed(3)} m²</strong></span>${sevBadge(d.severity)}</div>
+        <div class="dmg-meta" style="margin-top:5px"><span class="dmg-stat">${Math.round(d.confidence*100)}%</span></div>
+        <div class="dmg-time">${new Date(d.time).toLocaleTimeString()}</div>
+      </div>
+    </div>`).join('');
+}
+function renderLog(){
+  const l=document.getElementById('logList');
+  if(!damages.length){l.innerHTML='<div class="no-data">กำลังรอการตรวจจับ...</div>';return;}
+  l.innerHTML=[...damages].reverse().slice(0,12).map(d=>{
+    const dot=d.class.includes('แตก')?'crack':'pothole';
+    return `<div class="log-item"><div class="log-dot ${dot}"></div><div class="log-info">
+      <div class="log-type">${d.class}</div>
+      <div class="log-meta">${new Date(d.time).toLocaleTimeString()} · ${sevBadge(d.severity)}</div>
+    </div></div>`;
+  }).join('');
+}
+
+// ── Detail modal ──
+function openModal(id){
+  const d=damages.find(x=>x.id===id); if(!d)return;
+  document.getElementById('mClass').textContent=d.class;
+  document.getElementById('mType').textContent=d.class;
+  document.getElementById('mSev').innerHTML=sevBadge(d.severity);
+  document.getElementById('mConf').textContent=Math.round(d.confidence*100)+'%';
+  document.getElementById('mArea').textContent=d.area.toFixed(4)+' m²';
+  document.getElementById('mGps').textContent=d.lat.toFixed(5)+', '+d.lng.toFixed(5);
+  document.getElementById('mTime').textContent=new Date(d.time).toLocaleString();
+  document.getElementById('mImg').src=d.photo||'';
+  document.getElementById('mSevDot').style.background=SEV_COLOR[d.severity];
+  document.getElementById('modalBackdrop').classList.add('visible');
+}
+function closeModal(){document.getElementById('modalBackdrop').classList.remove('visible')}
+document.getElementById('curSev').innerHTML=sevBadge('high');
+
+// ── Photo upload for next pin ──
+document.getElementById('fPhoto').addEventListener('change',function(){
+  const f=this.files[0]; if(!f){window._pendingPhoto='';return;}
+  const r=new FileReader(); r.onload=e=>window._pendingPhoto=e.target.result; r.readAsDataURL(f);
+});
+// ── Randomize toggle ──
+function onRndToggle(){
+  const on=document.getElementById('rndOn').checked;
+  document.getElementById('rndOpts').style.display=on?'block':'none';
+  document.getElementById('rndBtn').classList.toggle('active',on);
+}
+
+// ── Live feed image ──
+function setLiveImage(inp){
+  const f=inp.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{ const img=document.getElementById('liveFeed'); img.src=e.target.result; img.style.display='block';
+    document.getElementById('livePlaceholder').style.display='none'; };
+  r.readAsDataURL(f);
+}
+
+// ── Views ──
+function switchView(v){
+  document.getElementById('mapView').classList.toggle('active',v==='map');
+  document.getElementById('historyView').classList.toggle('active',v==='history');
+  document.getElementById('liveView').style.display=v==='live'?'block':'none';
+  document.getElementById('tabMap').classList.toggle('active',v==='map');
+  document.getElementById('tabLive').classList.toggle('active',v==='live');
+  document.getElementById('tabHistory').classList.toggle('active',v==='history');
+  document.getElementById('mapTools').style.display=v==='map'?'block':'none';
+  if(v==='map'&&map) setTimeout(()=>map.invalidateSize(),50);
+}
+
+// ── Preview toggle (hide editor for clean screenshots) ──
+function togglePreview(){
+  const on=document.body.classList.toggle('preview-mode');
+  document.getElementById('previewBtn').innerHTML=on?'✎ Edit (show editor)':'👁 Preview (hide editor)';
+  if(map) setTimeout(()=>map.invalidateSize(),50);
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ closeModal(); if(document.body.classList.contains('preview-mode'))togglePreview(); }
+});
+
+// ── Seed with sample data so it looks populated immediately ──
+function resetMock(){
+  clearAll(); clearPath();
+  if(startM){map.removeLayer(startM);startM=null;} if(endM){map.removeLayer(endM);endM=null;}
+  const base=[
+    [18.7990,98.9650,'หลุมบ่อ (Pothole)','high',0.92,0.071],
+    [18.7975,98.9662,'รอยแตกตามยาว (Longitudinal Crack)','medium',0.81,0.034],
+    [18.7958,98.9671,'รอยแตกหนังจระเข้ (Alligator Crack)','high',0.86,0.058],
+    [18.7943,98.9685,'หลุมบ่อ (Pothole)','low',0.74,0.019],
+    [18.7931,98.9694,'รอยแตกตามขวาง (Transverse Crack)','medium',0.79,0.027]
+  ];
+  base.forEach(b=>addDamage([b[0],b[1]],{class:b[2],severity:b[3],confidence:b[4],area:b[5],photo:''}));
+  pathPts=base.map(b=>[b[0],b[1]]); drawPath();
+  setFlag('start',[base[0][0],base[0][1]]); setFlag('end',[base[base.length-1][0],base[base.length-1][1]]);
+  map.setView([18.7960,98.9672],15);
+}
+
+window.addEventListener('load',()=>{ initMap(); resetMock(); switchView('map'); });
+</script>
+</body>
+</html>
