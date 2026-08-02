@@ -126,7 +126,7 @@ def polygon_area_m2(points_px, px_per_cm_w=None, px_per_cm_h=None):
     H = _load_homography()
     if H is not None and cv2 is not None:
         world = cv2.perspectiveTransform(pts.reshape(-1, 1, 2), H).reshape(-1, 2)
-        return round(_shoelace_cm2(world) / 10000.0, 4)
+        return round(float(_shoelace_cm2(world)) / 10000.0, 4)
 
     # 2) Perpendicular-camera ground-sampling-distance
     if CAM_HEIGHT_CM > 0 and CAM_HFOV_DEG > 0:
@@ -139,7 +139,7 @@ def polygon_area_m2(points_px, px_per_cm_w=None, px_per_cm_h=None):
 
     # 3) Legacy fallback: fixed pixels-per-cm
     if px_per_cm_w and px_per_cm_h:
-        area_px = _shoelace_cm2(pts)               # this is px², reuse shoelace
+        area_px = float(_shoelace_cm2(pts))         # this is px², reuse shoelace
         return round((area_px / (px_per_cm_w * px_per_cm_h)) / 10000.0, 4)
 
     return 0.0
