@@ -22,7 +22,8 @@ try:
 except ImportError:
     ort = None
 
-load_dotenv()
+# Load the .env sitting next to this file, regardless of the working directory
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 # ── Config ────────────────────────────────────────────────────
 API_URL     = os.getenv("ROBOFLOW_API_URL",    "http://localhost:9001")
@@ -30,6 +31,13 @@ API_KEY     = os.getenv("ROBOFLOW_API_KEY",    "T4zuK4T4cMUowqMPvSVl")
 WORKSPACE   = os.getenv("ROBOFLOW_WORKSPACE",  "cheemo")
 WORKFLOW_ID = os.getenv("ROBOFLOW_WORKFLOW_ID","custom-workflow-2")
 CLOUD_URL   = os.getenv("CLOUD_API_URL",       None)
+
+# A freshly (re)started self-hosted inference server (e.g. Roboflow's Jetson
+# Docker image) can take minutes to load/optimize models on its FIRST request
+# (TensorRT engine build on a Jetson Nano is slow). A short timeout here just
+# causes an endless retry loop that never lets the model finish loading, so
+# this defaults generously; serverless/warm requests return in ~1-2s regardless.
+ROBOFLOW_TIMEOUT = float(os.getenv("ROBOFLOW_TIMEOUT", "120"))
 CAMERA_IDX  = int(os.getenv("CAMERA_INDEX",   0))
 
 # Frame source: "local" = USB webcam on this machine | "remote" = frames pushed
@@ -66,6 +74,15 @@ ULTRA_MODEL_PATH = os.getenv("ULTRA_MODEL", os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "YOLOv8_Small_RDD.pt"
 ))
 ULTRA_MODEL = None
+
+# ── Local in-process Roboflow inference (no serverless credits, no Docker) ──
+# Runs the SAME Roboflow models (detection + segmentation) locally via the
+# `inference` package. Free — uses this machine's compute, not serverless.
+USE_LOCAL_INFERENCE = os.getenv("USE_LOCAL_INFERENCE", "0").lower() in ("1", "true", "yes")
+LOCAL_DET_MODEL = os.getenv("LOCAL_DET_MODEL", "road-ai-yskqr/9")        # object detection
+LOCAL_SEG_MODEL = os.getenv("LOCAL_SEG_MODEL", "road-ai-segmentation/2")  # instance segmentation
+LOCAL_DET = None
+LOCAL_SEG = None
 
 INFERENCE_WIDTH  = 640
 INFERENCE_HEIGHT = 360
@@ -425,7 +442,7 @@ def estimate_cost(detection):
 
 
 def severity(detection):
-    """Return severity level based on area."""
+    """Return severity level based on damaged area (cm²)."""
     area_cm2 = detection.get("seg_area_cm2") or detection.get("bbox_area_cm2", 0)
     if area_cm2 < 100:   return "low"
     if area_cm2 < 500:   return "medium"
@@ -521,11 +538,14 @@ def _parse_onnx_output(raw, orig_w, orig_h, conf_thresh):
 # ── Inference core (shared by auto worker + manual capture) ──
 def infer_frame(frame, source="auto"):
     """Run inference on a single frame. Backend priority:
-       1. Ultralytics YOLO .pt on GPU (Jetson edge unit)
-       2. Roboflow Docker API
-       3. local ONNX runtime
+       1. Local in-process Roboflow models (no credits, no Docker)
+       2. Ultralytics YOLO .pt on GPU (Jetson edge unit)
+       3. Roboflow API (serverless / Docker)
+       4. local ONNX runtime
     Returns (outputs, detections)."""
-    if ULTRA_MODEL is not None:
+    if LOCAL_DET is not None:
+        return _infer_local(frame, source)
+    elif ULTRA_MODEL is not None:
         return _infer_ultralytics(frame, source)
     elif API_URL and ONNX_SESSION is None:
         return _infer_roboflow(frame, source)
@@ -534,6 +554,66 @@ def infer_frame(frame, source="auto"):
     else:
         print("[Inference] no inference backend available")
         return None, []
+
+
+def _to_dict(p):
+    """Roboflow prediction object -> plain dict (handles pydantic v1/v2)."""
+    for m in ("model_dump", "dict"):
+        if hasattr(p, m):
+            try:
+                return getattr(p, m)()
+            except Exception:
+                pass
+    return dict(getattr(p, "__dict__", {}))
+
+
+def _infer_local(frame, source="auto"):
+    """Run the Roboflow detection + segmentation models LOCALLY, in-process via
+    the `inference` package — no serverless credits, no Docker. Same output
+    format as _infer_roboflow (predictions in the frame's pixel coordinates)."""
+    det_res = LOCAL_DET.infer(frame)[0]
+    seg_res = LOCAL_SEG.infer(frame)[0]
+
+    bbox_preds = []
+    for p in (getattr(det_res, "predictions", None) or []):
+        d = _to_dict(p)
+        bbox_preds.append({
+            "class":      d.get("class") or d.get("class_name") or "damage",
+            "confidence": round(float(d.get("confidence", 0)), 3),
+            "x": float(d["x"]), "y": float(d["y"]),
+            "width": float(d["width"]), "height": float(d["height"]),
+        })
+
+    seg_preds = []
+    for p in (getattr(seg_res, "predictions", None) or []):
+        d = _to_dict(p)
+        pts = [{"x": float(pt["x"]), "y": float(pt["y"])} for pt in (d.get("points") or [])]
+        if pts:
+            seg_preds.append({
+                "class":      d.get("class") or d.get("class_name") or "damage",
+                "confidence": round(float(d.get("confidence", 0)), 3),
+                "points":     pts,
+            })
+
+    outputs = {
+        "predictions":         {"predictions": bbox_preds},
+        "model_1_predictions": {"predictions": seg_preds},
+    }
+    detections = []
+    bbox    = bbox_preds[0] if bbox_preds else None
+    seg     = seg_preds[0]  if seg_preds  else None
+    metrics = calculate_metrics(pred_bbox=bbox, pred_seg=seg)
+
+    if bbox:
+        det = {"class": bbox["class"], "confidence": bbox["confidence"], "type": "bbox",
+               "source": source, "timestamp": time.time(), **metrics}
+        det["severity"] = severity(det); det.update(estimate_cost(det)); detections.append(det)
+    if seg:
+        det = {"class": "Segmentation", "confidence": seg["confidence"], "type": "seg",
+               "source": source, "timestamp": time.time(), **metrics}
+        det["severity"] = severity(det); det.update(estimate_cost(det)); detections.append(det)
+
+    return outputs, detections
 
 
 def _infer_ultralytics(frame, source="auto"):
@@ -591,7 +671,7 @@ def _infer_roboflow(frame, source="auto"):
         "inputs":   {"image": {"type": "base64", "value": encode_frame(frame)}},
         "use_cache": False,
     }
-    response = requests.post(url, json=payload, timeout=10)
+    response = requests.post(url, json=payload, timeout=ROBOFLOW_TIMEOUT)
     if not response.ok:
         return None, []
 
@@ -826,6 +906,18 @@ def generate_stream():
 @app.route("/video_feed")
 def video_feed():
     return Response(generate_stream(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.route("/snapshot")
+def snapshot():
+    """Return the current RAW camera frame as a JPEG (no annotations).
+    Used by the measurement tool to grab a still for calibration/measurement."""
+    with lock:
+        frame = latest_frame.copy() if latest_frame is not None else None
+    if frame is None:
+        return jsonify({"error": "no frame available"}), 503
+    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
+    return Response(buf.tobytes(), mimetype="image/jpeg")
 
 
 @app.route("/upload", methods=["POST"])
@@ -1219,8 +1311,21 @@ def add_cors(response):
     return response
 
 
+def _load_local_inference():
+    global LOCAL_DET, LOCAL_SEG
+    if not USE_LOCAL_INFERENCE:
+        return
+    from inference import get_model
+    print(f"Loading local models (downloads weights once, runs on THIS machine, no credits)...")
+    LOCAL_DET = get_model(model_id=LOCAL_DET_MODEL, api_key=API_KEY)
+    LOCAL_SEG = get_model(model_id=LOCAL_SEG_MODEL, api_key=API_KEY)
+    print(f"Local in-process inference ready: {LOCAL_DET_MODEL} + {LOCAL_SEG_MODEL}")
+
+
 def _load_ultralytics():
     global ULTRA_MODEL
+    if USE_LOCAL_INFERENCE:
+        return  # local Roboflow models take priority
     if not USE_ULTRA:
         return
     if not os.path.exists(ULTRA_MODEL_PATH):
@@ -1237,10 +1342,10 @@ def _load_ultralytics():
 
 def _load_onnx():
     global ONNX_SESSION
-    if USE_ULTRA:
-        return  # Ultralytics takes priority — don't also load ONNX
+    if USE_LOCAL_INFERENCE or USE_ULTRA:
+        return  # a higher-priority backend is active
     if not USE_ONNX:
-        print("ONNX inference disabled (USE_ONNX=0) — using Roboflow Docker")
+        print("ONNX inference disabled (USE_ONNX=0) — using Roboflow API")
         return
     if ort is None:
         print("WARNING: onnxruntime not installed — ONNX backend unavailable")
@@ -1258,6 +1363,7 @@ def _load_onnx():
 
 # ── Entry point ───────────────────────────────────────────────
 if __name__ == "__main__":
+    _load_local_inference()
     _load_ultralytics()
     _load_onnx()
 

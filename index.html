@@ -346,8 +346,9 @@
     </div>
     <div class="device-wrap">
       <span class="device-label" data-i18n="deviceLabel">อุปกรณ์:</span>
-      <input class="device-input" id="deviceUrl" list="ipList" value="http://nano.local:5000" placeholder="http://nano.local:5000"/>
+      <input class="device-input" id="deviceUrl" list="ipList" value="http://localhost:5000" placeholder="http://localhost:5000"/>
       <datalist id="ipList">
+        <option value="http://localhost:5000">Laptop (local inference)</option>
         <option value="http://nano.local:5000">Jetson (by name)</option>
         <option value="http://192.168.1.169:5000">Jetson (home IP)</option>
         <option value="http://localhost:5000">Local</option>
@@ -822,7 +823,7 @@ setInterval(()=>{
 },1000);
 
 // ── Connection state ───────────────────────────────────────
-let deviceUrl   = localStorage.getItem('roadai_device') || 'http://nano.local:5000';
+let deviceUrl   = localStorage.getItem('roadai_device') || 'http://localhost:5000';
 let isConnected = false;
 let confidences = [];
 let demoTimer   = null;
@@ -1010,6 +1011,7 @@ function rememberDevice(url){
 function renderDeviceList(){
   const dl = document.getElementById('ipList');
   const defaults = [
+    {v:'http://localhost:5000',     label:'Laptop (local inference)'},
     {v:'http://nano.local:5000',    label:'Jetson (by name)'},
     {v:'http://192.168.1.161:5000', label:'Jetson (school IP)'},
     {v:'http://192.168.1.169:5000', label:'Jetson (home IP)'},

@@ -51,8 +51,8 @@ def estimate_repair_cost(damage_class, severity, area_m2):
     severity     : "low" | "medium" | "high"
     area_m2      : damaged area in square metres
 
-    Returns:
-      cost_thb, repair_method, repair_method_th, rate_thb, unit, source
+    Returns cost + repair method + source, plus PHYSICAL QUANTITIES:
+      repair_volume_m3, repair_mass_kg  (material needed to patch the layer)
     """
     rates  = _load()
     area   = float(area_m2 or 0)
@@ -73,6 +73,13 @@ def estimate_repair_cost(damage_class, severity, area_m2):
     else:                         # per-metre methods would need a length, not area
         cost = 0.0
 
+    # ── Physical quantities (physics layer) ──────────────────────────────
+    pq        = rates.get("physical_quantities", {})
+    thickness = pq.get("repair_layer_thickness_m", {}).get(method_key, 0.0)
+    density   = pq.get("material_density_kg_m3", {}).get("default", 2200)
+    repair_volume_m3 = area * thickness           # V = area × layer thickness
+    repair_mass_kg   = repair_volume_m3 * density  # m = ρV
+
     src = rates.get("_source", {})
     return {
         "cost_thb":         round(cost),
@@ -81,4 +88,6 @@ def estimate_repair_cost(damage_class, severity, area_m2):
         "rate_thb":         rate,
         "rate_unit":        unit,
         "cost_source":      f"{src.get('agency','')} — {src.get('chapter','')} (p.{method.get('page','?')})",
+        "repair_volume_m3": round(repair_volume_m3, 5),
+        "repair_mass_kg":   round(repair_mass_kg, 2),
     }

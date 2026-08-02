@@ -51,5 +51,15 @@
     "bridge_clean_paint_m": 318.2,
     "km_post_painting_each": 139.8,
     "curve_marker_painting_each": 22.5
+  },
+
+  "physical_quantities": {
+    "_comment": "For deriving physical quantities (volume, mass) from a detection. Repair-layer thickness: patching fills a layer (manual: Skin Patching 'ความหนา 5 ซม.'); seals are thin surface treatments (~0). Density of compacted hot/cold asphalt mix ~2300 kg/m3.",
+    "repair_layer_thickness_m": {
+      "fog_seal": 0.0, "chip_seal": 0.0, "skin_patching": 0.05, "deep_patching": 0.10
+    },
+    "material_density_kg_m3": {
+      "asphalt_mix": 2300, "crushed_rock": 2000, "default": 2200
+    }
   }
 }
